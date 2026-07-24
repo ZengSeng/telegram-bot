@@ -8,6 +8,17 @@ transcribes it with whisper.cpp, and logs it to a local JSONL file.
 Run:  python voice_logger_bot.py
 Stop: Ctrl+C
 
+## Code structure
+
+| File | Role |
+|------|------|
+| `voice_logger_bot.py` | Entry point — wires handlers + starts bot |
+| `config.py` | All constants, paths, prompts, logging setup |
+| `llm.py` | Llama-server lifecycle, whisper transcription, AI requests |
+| `trades.py` | CSV read/write, duplicate detection, watchlist |
+| `portfolio.py` | FIFO matching, yfinance prices, summary builder |
+| `handlers.py` | All Telegram command/message handlers |
+
 ## What it does
 
 - **Voice note** → transcribes with whisper.cpp → sends to local AI → replies with answer
