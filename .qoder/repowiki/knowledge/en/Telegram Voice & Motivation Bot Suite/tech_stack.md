@@ -1,0 +1,1 @@
+Python 3 with `python-telegram-bot[job-queue]==21.6` for async Telegram handling, `yfinance` for market prices, `requests` for HTTP calls to the local LLM, and external binaries `whisper.cpp` (transcription) and `ffmpeg` (audio format conversion); both bots also rely on a locally running `llama-server` instance at `http://127.0.0.1:10000`.

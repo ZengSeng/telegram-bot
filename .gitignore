@@ -1,0 +1,22 @@
+# Virtual environment
+venv/
+
+# Runtime data (audio, images, logs, trades, config)
+data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store

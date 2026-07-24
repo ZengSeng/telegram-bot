@@ -1,0 +1,1 @@
+Each bot runs independently via `python bot.py` or `python voice_logger_bot.py`; setup requires creating a Telegram bot via @BotFather, installing whisper.cpp and ffmpeg, then setting `BOT_TOKEN_MOTIVATION` or `BOT_TOKEN_AI` environment variables respectively. The voice logger additionally boots a llama.cpp server process on startup and waits 20 seconds before accepting requests.

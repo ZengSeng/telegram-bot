@@ -1,0 +1,5 @@
+- External binary paths (whisper.cpp, ffmpeg, llama-server) are configured as module-level constants and invoked via `subprocess.run`/`Popen` with explicit stdout/stderr capture.
+- Persistent state lives under a `data/` directory created with `mkdir(exist_ok=True)` at import time, using `chat_id.txt` for user targeting, JSONL for logs, CSV for structured trade records, and plain text for prompts/watchlists.
+- Audio processing follows a fixed pipeline: download `.ogg` from Telegram → convert to 16 kHz mono `.wav` via ffmpeg → transcribe with whisper.cpp `-otxt -of` flags → read the generated `.txt` as fallback if stdout is empty.
+- Handlers follow the `(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None` signature and reply through `update.message.reply_text(...)` rather than returning values.
+- Scheduled jobs are registered via `app.job_queue.run_daily(...)` with a `dt.time(hour=..., minute=...)` object.

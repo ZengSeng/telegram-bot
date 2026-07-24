@@ -1,0 +1,2 @@
+- Audio assets and their transcripts share the same base filename derived from the UTC timestamp (`YYYYMMDD_HHMMSS`), with `.ogg`, `.wav`, and `.txt` extensions forming a triplet.
+- Each line in `voice_log.jsonl` is a self-contained JSON object with a `timestamp` field followed by interaction fields (`source`, `input`, `reply`, `audio_file`), enabling simple append-only streaming reads.

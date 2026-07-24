@@ -1,0 +1,30 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: en-US
+branch: Q0DeR-MaG1C-BrAnCh-Fo2-NoN-GiT-Or-No-C0MmIt
+nodes_managed: true
+exported_at: "2026-07-24T11:57:08Z"
+modules:
+    "":
+        dir_name: Telegram Voice & Motivation Bot Suite
+        title: Telegram Voice & Motivation Bot Suite
+        scope:
+            - bot.py
+            - voice_logger_bot.py
+            - requirements.txt
+            - MyNotes.md
+            - SETUP.md
+        source_files: []
+        children:
+            - data
+        depends_on: []
+        related_to: []
+    data:
+        dir_name: Telegram Bot Runtime Data & Audio Assets
+        title: Telegram Bot Runtime Data & Audio Assets
+        scope:
+            - data/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []

@@ -1,0 +1,1 @@
+JSON Lines (`jsonl`) for structured logging; Ogg Vorbis (`.ogg`) and WAV (`.wav`) audio formats; plain-text transcripts keyed by the same timestamp filename convention.

@@ -1,0 +1,1 @@
+Persistent runtime storage for the Telegram bot containing the target chat ID, a JSONL transcript log of voice interactions, and paired audio/transcript assets generated during bot sessions.

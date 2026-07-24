@@ -1,0 +1,1 @@
+Two independent Python Telegram bots — a daily motivation check-in logger and a voice+text AI logger with stock trade tracking — sharing the same whisper.cpp transcription pipeline, ffmpeg audio conversion, and local JSONL/CSV data storage under a common data directory.

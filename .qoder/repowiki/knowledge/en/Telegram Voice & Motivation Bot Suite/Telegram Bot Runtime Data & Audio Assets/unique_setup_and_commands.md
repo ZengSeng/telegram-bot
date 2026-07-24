@@ -1,0 +1,1 @@
+No build or setup required — the bot expects `data/chat_id.txt` to contain a valid Telegram chat ID before it can send messages, and will create `voice_log.jsonl` and `audio/` entries automatically on first voice interaction.

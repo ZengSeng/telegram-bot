@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: ""
+title: Telegram Voice & Motivation Bot Suite
+scope:
+    - bot.py
+    - voice_logger_bot.py
+    - requirements.txt
+    - MyNotes.md
+    - SETUP.md
+source_files: []
+depends_on: []
+related_to: []
