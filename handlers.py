@@ -33,20 +33,29 @@ from trades import (
 
 
 # ---------------------------------------------------------------------------
-# Chat ID persistence (for scheduled messages)
+# Chat ID persistence (for scheduled messages) — supports multiple users
 # ---------------------------------------------------------------------------
 
-def load_chat_id() -> int | None:
+def load_chat_ids() -> list[int]:
     if CHAT_ID_FILE.exists():
-        try:
-            return int(CHAT_ID_FILE.read_text().strip())
-        except ValueError:
-            pass
-    return None
+        ids = []
+        for line in CHAT_ID_FILE.read_text().strip().splitlines():
+            line = line.strip()
+            if line:
+                try:
+                    ids.append(int(line))
+                except ValueError:
+                    pass
+        return ids
+    return []
 
 
 def save_chat_id(chat_id: int) -> None:
-    CHAT_ID_FILE.write_text(str(chat_id))
+    """Add a chat_id if not already registered."""
+    existing = load_chat_ids()
+    if chat_id not in existing:
+        existing.append(chat_id)
+        CHAT_ID_FILE.write_text("\n".join(str(i) for i in existing))
 
 
 # ---------------------------------------------------------------------------
@@ -115,13 +124,17 @@ async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def send_daily_summary(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Scheduled daily portfolio summary."""
-    chat_id = load_chat_id()
-    if chat_id is None:
-        log.warning("No chat_id saved — user hasn't run /start")
+    """Scheduled daily portfolio summary — sent to all registered users."""
+    chat_ids = load_chat_ids()
+    if not chat_ids:
+        log.warning("No chat_ids saved — no user has run /start")
         return
     msg = build_portfolio_summary()
-    await context.bot.send_message(chat_id=chat_id, text=msg)
+    for chat_id in chat_ids:
+        try:
+            await context.bot.send_message(chat_id=chat_id, text=msg)
+        except Exception as e:
+            log.warning("Failed to send summary to %s: %s", chat_id, e)
 
 
 async def gains_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

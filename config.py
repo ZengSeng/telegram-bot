@@ -20,7 +20,7 @@ LLAMA_CMD = [
     "--port", "10000",
 ]
 LLAMA_URL = "http://127.0.0.1:10000/v1/chat/completions"
-LLAMA_STARTUP_WAIT_SECONDS = 20
+LLAMA_STARTUP_WAIT_SECONDS = 5
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -39,8 +39,9 @@ CHAT_ID_FILE = DATA_DIR / "chat_id.txt"
 # Schedule
 # ---------------------------------------------------------------------------
 
-SUMMARY_HOUR = 11
-SUMMARY_MINUTE = 51
+SUMMARY_HOUR = 12
+SUMMARY_MINUTE = 30
+LOCAL_TIMEZONE = "Pacific/Auckland"  # New Zealand
 
 # ---------------------------------------------------------------------------
 # Prompts & schemas

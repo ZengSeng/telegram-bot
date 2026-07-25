@@ -6,6 +6,7 @@ Stop: Ctrl+C
 """
 
 import datetime as dt
+from zoneinfo import ZoneInfo
 
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
@@ -14,6 +15,7 @@ import llm
 from config import (
     BOT_TOKEN,
     DEFAULT_SYSTEM_PROMPT,
+    LOCAL_TIMEZONE,
     SUMMARY_HOUR,
     SUMMARY_MINUTE,
     SYSTEM_PROMPT_FILE,
@@ -42,8 +44,9 @@ def main() -> None:
     app.add_handler(MessageHandler(filters.VOICE, handlers.handle_voice))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.handle_text))
 
-    # Schedule daily portfolio summary
-    summary_time = dt.time(hour=SUMMARY_HOUR, minute=SUMMARY_MINUTE)
+    # Schedule daily portfolio summary (local time)
+    tz = ZoneInfo(LOCAL_TIMEZONE)
+    summary_time = dt.time(hour=SUMMARY_HOUR, minute=SUMMARY_MINUTE, tzinfo=tz)
     app.job_queue.run_daily(handlers.send_daily_summary, time=summary_time)
 
     log.info("Bot starting...")

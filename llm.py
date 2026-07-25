@@ -26,16 +26,28 @@ llama_process: subprocess.Popen | None = None
 system_prompt: str = ""
 
 
+def _is_server_running() -> bool:
+    """Check if the llama-server is already responding on its port."""
+    try:
+        resp = requests.get(LLAMA_URL.replace("/v1/chat/completions", "/health"), timeout=3)
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
 def start_llama_server() -> None:
-    """Launch the local LLM server as a background process."""
+    """Launch the local LLM server as a background process (skip if already running)."""
     global llama_process
+    if _is_server_running():
+        log.info("Llama server already running, skipping startup.")
+        return
     log.info("Starting llama server: %s", " ".join(LLAMA_CMD))
     llama_process = subprocess.Popen(
         LLAMA_CMD,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    atexit.register(stop_llama_server)
+    # atexit.register(stop_llama_server)  # keep for production
     log.info("Waiting %ss for the model to load...", LLAMA_STARTUP_WAIT_SECONDS)
     time.sleep(LLAMA_STARTUP_WAIT_SECONDS)
 

@@ -14,6 +14,18 @@ from trades import load_watchlist, read_trades
 # yfinance helpers
 # ---------------------------------------------------------------------------
 
+def get_usd_nzd_rate() -> float:
+    """Fetch the current USD/NZD exchange rate."""
+    try:
+        ticker_obj = yf.Ticker("NZDUSD=X")
+        rate = ticker_obj.fast_info.get("lastPrice") or ticker_obj.fast_info.get("last_price")
+        if rate:
+            return 1.0 / float(rate)  # NZDUSD is NZD per 1 USD... actually it's USD per NZD
+    except Exception as e:
+        log.warning("Failed to fetch USD/NZD rate: %s", e)
+    return 0.0
+
+
 def get_current_prices(tickers: list[str]) -> dict[str, float]:
     """Fetch the latest price for each ticker. Returns {ticker: price}."""
     prices = {}
@@ -242,6 +254,7 @@ def build_portfolio_summary() -> str:
     watchlist = load_watchlist()
     prices = get_current_prices(watchlist)
     portfolio = compute_portfolio(trades)
+    usd_nzd = get_usd_nzd_rate()
 
     today = dt.date.today().strftime("%Y-%m-%d")
     lines = [f"📊 Portfolio Summary — {today}", ""]
@@ -266,23 +279,29 @@ def build_portfolio_summary() -> str:
         indicator = "🟢" if change_pct >= 0 else "🔴"
         change_str = f"+{change_pct:.2f}%" if change_pct >= 0 else f"{change_pct:.2f}%"
         price_str = f"${current_price:,.2f}" if current_price else "N/A"
+        avg_str = f"${avg_cost:,.2f}"
+        mv_str = f"${market_value:,.2f}"
 
         lines.append(f"{ticker}")
-        lines.append(f"  Daily Price:    {price_str:>12}")
-        lines.append(f"  Avg Cost:       ${avg_cost:>11,.2f}")
-        lines.append(f"  Shares:         {shares:>12.0f}")
-        lines.append(f"  Market Value:   ${market_value:>11,.2f}")
-        lines.append(f"  Change:         {change_str:>12} {indicator}")
+        lines.append(f"  Daily Price:      {price_str}")
+        lines.append(f"  Avg Cost:         {avg_str}")
+        lines.append(f"  Shares:             {shares:.0f}")
+        lines.append(f"  Market Value:  {mv_str}")
+        lines.append(f"  Change:           {change_str} {indicator}")
         lines.append("")
 
     unrealized = total_market_value - total_invested
     unrealized_pct = (unrealized / total_invested * 100) if total_invested > 0 else 0.0
-    sign = "+" if unrealized >= 0 else ""
+    sign = "+" if unrealized >= 0 else "-"
     total_indicator = "🟢" if unrealized >= 0 else "🔴"
 
+    inv_str = f"${total_invested:,.0f}"
+    val_str = f"${total_market_value:,.0f}"
+    pnl_str = f"{sign}${abs(unrealized):,.0f}"
+
     lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    lines.append(f"Total Invested:   ${total_invested:>11,.2f}")
-    lines.append(f"Market Value:     ${total_market_value:>11,.2f}")
-    lines.append(f"Unrealized P&L:   {sign}${unrealized:>11,.2f} ({sign}{unrealized_pct:.2f}%) {total_indicator}")
+    lines.append(f"Total Invested:   {inv_str} (NZD {total_invested * usd_nzd:,.0f})")
+    lines.append(f"Market Value:     {val_str} (NZD {total_market_value * usd_nzd:,.0f})")
+    lines.append(f"Unrealized P&L:   {pnl_str} ({sign}{abs(unrealized_pct):.2f}%) {total_indicator}")
 
     return "\n".join(lines)
