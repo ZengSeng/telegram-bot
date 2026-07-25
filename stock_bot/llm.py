@@ -10,7 +10,7 @@ from pathlib import Path
 
 import requests
 
-from config import (
+from .config import (
     LLAMA_CMD,
     LLAMA_STARTUP_WAIT_SECONDS,
     LLAMA_URL,

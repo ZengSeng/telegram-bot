@@ -13,11 +13,18 @@ Stop: Ctrl+C
 | File | Role |
 |------|------|
 | `voice_logger_bot.py` | Entry point — wires handlers + starts bot |
-| `config.py` | All constants, paths, prompts, logging setup |
-| `llm.py` | Llama-server lifecycle, whisper transcription, AI requests |
-| `trades.py` | CSV read/write, duplicate detection, watchlist |
-| `portfolio.py` | FIFO matching, yfinance prices, summary builder |
-| `handlers.py` | All Telegram command/message handlers |
+| `stock_bot/config.py` | All constants, paths, prompts, logging setup |
+| `stock_bot/llm.py` | Llama-server lifecycle, whisper transcription, AI requests |
+| `stock_bot/trades.py` | CSV read/write, duplicate detection, watchlist |
+| `stock_bot/portfolio.py` | FIFO matching, yfinance prices, summary builder |
+| `stock_bot/handlers.py` | All Telegram command/message handlers |
+
+## Running the AI separately
+
+You can run llama-server in its own terminal (bot will detect it and skip startup):
+```
+llama-server -hf empero-ai/Qwythos-9B-v2-GGUF:Q8_0 --alias MyQwythos --port 10000
+```
 
 ## What it does
 

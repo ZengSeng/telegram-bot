@@ -7,8 +7,8 @@ import subprocess
 from telegram import Update
 from telegram.ext import ContextTypes
 
-import llm
-from config import (
+from . import llm
+from .config import (
     AUDIO_DIR,
     CHAT_ID_FILE,
     DEFAULT_SYSTEM_PROMPT,
@@ -17,13 +17,13 @@ from config import (
     TRADE_EXTRACTION_PROMPT,
     log,
 )
-from portfolio import (
+from .portfolio import (
     build_portfolio_summary,
     compute_fifo_details,
     extract_ticker,
     get_current_prices,
 )
-from trades import (
+from .trades import (
     append_trade,
     is_duplicate,
     load_watchlist,

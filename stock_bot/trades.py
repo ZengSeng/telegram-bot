@@ -3,7 +3,7 @@
 import csv
 import json
 
-from config import TRADES_CSV, TRADES_CSV_COLUMNS, WATCHLIST_FILE
+from .config import TRADES_CSV, TRADES_CSV_COLUMNS, WATCHLIST_FILE
 
 
 # ---------------------------------------------------------------------------

@@ -6,8 +6,8 @@ from collections import defaultdict
 
 import yfinance as yf
 
-from config import log
-from trades import load_watchlist, read_trades
+from .config import log
+from .trades import load_watchlist, read_trades
 
 
 # ---------------------------------------------------------------------------

@@ -20,13 +20,14 @@ LLAMA_CMD = [
     "--port", "10000",
 ]
 LLAMA_URL = "http://127.0.0.1:10000/v1/chat/completions"
-LLAMA_STARTUP_WAIT_SECONDS = 5
+LLAMA_STARTUP_WAIT_SECONDS = 1
 
 # ---------------------------------------------------------------------------
-# Paths
+# Paths (project root is one level up from this package)
 # ---------------------------------------------------------------------------
 
-DATA_DIR = Path(__file__).parent / "data"
+PROJECT_ROOT = Path(__file__).parent.parent
+DATA_DIR = PROJECT_ROOT / "data"
 AUDIO_DIR = DATA_DIR / "audio"
 IMAGES_DIR = DATA_DIR / "images"
 LOG_FILE = DATA_DIR / "voice_log.jsonl"
@@ -39,8 +40,8 @@ CHAT_ID_FILE = DATA_DIR / "chat_id.txt"
 # Schedule
 # ---------------------------------------------------------------------------
 
-SUMMARY_HOUR = 12
-SUMMARY_MINUTE = 30
+SUMMARY_HOUR = 9
+SUMMARY_MINUTE = 0
 LOCAL_TIMEZONE = "Pacific/Auckland"  # New Zealand
 
 # ---------------------------------------------------------------------------

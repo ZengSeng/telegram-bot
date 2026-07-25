@@ -10,9 +10,8 @@ from zoneinfo import ZoneInfo
 
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
-import handlers
-import llm
-from config import (
+from stock_bot import handlers, llm
+from stock_bot.config import (
     BOT_TOKEN,
     DEFAULT_SYSTEM_PROMPT,
     LOCAL_TIMEZONE,
