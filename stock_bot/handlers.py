@@ -72,7 +72,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/watch <TICKER> - add ticker to watchlist\n"
         "/unwatch <TICKER> - remove ticker\n"
         "/summary - portfolio summary\n"
-        "/gains - realized/unrealized P&L"
+        "/gains - realized/unrealized P&L\n"
+        "/analyze <TICKER> - multi-agent AI analysis\n"
+        "/report <TICKER> - full analysis report"
     )
 
 
@@ -135,6 +137,83 @@ async def send_daily_summary(context: ContextTypes.DEFAULT_TYPE) -> None:
             await context.bot.send_message(chat_id=chat_id, text=msg)
         except Exception as e:
             log.warning("Failed to send summary to %s: %s", chat_id, e)
+
+
+async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Run TradingAgents multi-agent analysis on a ticker."""
+    if not context.args:
+        await update.message.reply_text("Usage: /analyze <TICKER>\nExample: /analyze AAPL")
+        return
+
+    ticker = context.args[0].upper()
+    await update.message.reply_text(
+        f"Starting multi-agent analysis for {ticker}...\n"
+        "This may take 1-3 minutes. I'll send the result when done."
+    )
+
+    try:
+        # Run in executor to avoid blocking the event loop
+        import asyncio
+        from analysis.runner import run_analysis
+
+        loop = asyncio.get_event_loop()
+        decision = await loop.run_in_executor(None, run_analysis, ticker)
+
+        # Truncate if too long for Telegram (4096 char limit)
+        if len(decision) > 4000:
+            decision = decision[:4000] + "\n\n... (truncated)"
+
+        await update.message.reply_text(
+            f"Analysis for {ticker}:\n\n{decision}\n\n"
+            f"Use /report {ticker} for the full breakdown."
+        )
+    except Exception as e:
+        log.error("Analysis failed for %s: %s", ticker, e)
+        await update.message.reply_text(
+            f"Analysis failed for {ticker}: {e}\n\n"
+            f"Make sure you've ingested data first:\n"
+            f"python -m data_eng {ticker}"
+        )
+
+
+async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send the detailed report from the last analysis run."""
+    if not context.args:
+        await update.message.reply_text("Usage: /report <TICKER>\nExample: /report AAPL")
+        return
+
+    ticker = context.args[0].upper()
+
+    from analysis.runner import get_last_report
+
+    report_path = get_last_report(ticker)
+    if not report_path or not report_path.exists():
+        await update.message.reply_text(
+            f"No report found for {ticker}.\n"
+            f"Run /analyze {ticker} first."
+        )
+        return
+
+    # Read the complete report
+    content = report_path.read_text(encoding="utf-8")
+
+    # Telegram limit is 4096 chars — send in chunks if needed
+    if len(content) <= 4000:
+        await update.message.reply_text(content)
+    else:
+        # Send section by section
+        sections = content.split("\n## ")
+        header = sections[0]
+        await update.message.reply_text(header[:4000])
+
+        for section in sections[1:]:
+            chunk = f"## {section}"
+            # Split further if a single section is too long
+            while len(chunk) > 4000:
+                await update.message.reply_text(chunk[:4000])
+                chunk = chunk[4000:]
+            if chunk.strip():
+                await update.message.reply_text(chunk)
 
 
 async def gains_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

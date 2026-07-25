@@ -7,7 +7,7 @@ locally with whisper.cpp, and logs it to `data/checkins.jsonl`.
 
 1. Open Telegram, message **@BotFather**.
 2. `/newbot`, follow the prompts, copy the token it gives you.
-3. Paste that token into `bot.py` as `BOT_TOKEN`.
+3. Keep the token in System Environment Variable, use in scripts as `BOT_TOKEN`.
 
 ## 2. Install whisper.cpp
 See chat: https://claude.ai/chat/ff107af9-50af-4caa-92d0-0281452f6f86 (no need to refer this for development)
