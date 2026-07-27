@@ -101,7 +101,20 @@ async def watch_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
     watchlist.append(ticker)
     save_watchlist(watchlist)
-    await update.message.reply_text(f"Added {ticker} to watchlist: {', '.join(watchlist)}")
+    await update.message.reply_text(
+        f"Added {ticker} to watchlist: {', '.join(watchlist)}\n"
+        f"Starting full data ingestion for {ticker} (background)..."
+    )
+
+    # Trigger full ingestion in background
+    import asyncio
+    from data_eng.ingest import ingest_all
+
+    async def _run_ingestion():
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, ingest_all, ticker)
+
+    asyncio.ensure_future(_run_ingestion())
 
 
 async def unwatch_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -140,12 +153,36 @@ async def send_daily_summary(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Run TradingAgents multi-agent analysis on a ticker."""
+    """Run TradingAgents multi-agent analysis on a ticker (cached per day)."""
     if not context.args:
-        await update.message.reply_text("Usage: /analyze <TICKER>\nExample: /analyze AAPL")
+        await update.message.reply_text(
+            "Usage: /analyze <TICKER> [--force]\n"
+            "Example: /analyze AAPL\n"
+            "Use --force to re-run if already analyzed today."
+        )
         return
 
-    ticker = context.args[0].upper()
+    force = "--force" in context.args
+    ticker = next((a.upper() for a in context.args if not a.startswith("--")), None)
+    if not ticker:
+        await update.message.reply_text("Usage: /analyze <TICKER> [--force]")
+        return
+
+    # Check same-day cache
+    from analysis.runner import get_cached_analysis
+
+    if not force:
+        cached = get_cached_analysis(ticker)
+        if cached:
+            if len(cached) > 4000:
+                cached = cached[:4000] + "\n\n... (truncated)"
+            await update.message.reply_text(
+                f"Already analyzed {ticker} today (cached):\n\n{cached}\n\n"
+                f"Use /report {ticker} for the full breakdown.\n"
+                f"Use /analyze {ticker} --force to re-run."
+            )
+            return
+
     await update.message.reply_text(
         f"Starting multi-agent analysis for {ticker}...\n"
         "This may take 1-3 minutes. I'll send the result when done."

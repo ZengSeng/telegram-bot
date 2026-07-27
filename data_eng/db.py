@@ -89,6 +89,69 @@ CREATE TABLE IF NOT EXISTS analyst_targets (
     rating          VARCHAR,
     PRIMARY KEY (ticker, date_fetched, analyst)
 );
+
+CREATE TABLE IF NOT EXISTS ticker_enriched (
+    ticker              VARCHAR NOT NULL,
+    date_fetched        DATE NOT NULL,
+
+    -- Yahoo AI summary
+    yahoo_summary       VARCHAR,
+
+    -- Growth estimates (from yfinance growth_estimates)
+    stock_trend_0q      DOUBLE,
+    stock_trend_1q      DOUBLE,
+    stock_trend_0y      DOUBLE,
+    stock_trend_1y      DOUBLE,
+    index_trend_ltg     DOUBLE,
+    stock_over_index_0q DOUBLE,
+    stock_over_index_1q DOUBLE,
+    stock_over_index_0y DOUBLE,
+    stock_over_index_1y DOUBLE,
+
+    -- Analyst price targets
+    target_low          DOUBLE,
+    target_mean         DOUBLE,
+    target_median       DOUBLE,
+    target_current      DOUBLE,
+    target_high         DOUBLE,
+    target_over_mean    DOUBLE,
+    target_over_median  DOUBLE,
+
+    -- Recommendations
+    rec_strong_buy      INTEGER,
+    rec_buy             INTEGER,
+    rec_hold            INTEGER,
+    rec_sell            INTEGER,
+    rec_strong_sell     INTEGER,
+
+    -- Technical indicators (latest snapshot)
+    sma_20              DOUBLE,
+    sma_50              DOUBLE,
+    ema_12              DOUBLE,
+    ema_26              DOUBLE,
+    macd                DOUBLE,
+    macd_signal         DOUBLE,
+    macd_hist           DOUBLE,
+    rsi_14              DOUBLE,
+    bb_upper            DOUBLE,
+    bb_middle           DOUBLE,
+    bb_lower            DOUBLE,
+    bb_width            DOUBLE,
+    volume_sma_20       DOUBLE,
+    obv                 DOUBLE,
+    volume_ratio        DOUBLE,
+
+    -- Trading signals
+    signal_rsi          INTEGER,
+    signal_macd         INTEGER,
+    signal_trend        INTEGER,
+    signal_bb           INTEGER,
+    signal_volume       INTEGER,
+    combined_signal     DOUBLE,
+    trade_signal        INTEGER,
+
+    PRIMARY KEY (ticker, date_fetched)
+);
 """
 
 

@@ -1,6 +1,8 @@
 python-telegram-bot[job-queue]==21.6
 yfinance
 duckdb
+ta
+beautifulsoup4
 
 # TradingAgents is installed via git submodule:
 #   git submodule update --init

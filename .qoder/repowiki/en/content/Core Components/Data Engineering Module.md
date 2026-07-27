@@ -8,6 +8,14 @@
 - [data_eng/ingest.py](file://data_eng/ingest.py)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Updated documentation to reflect the new data engineering subsystem implementation
+- Added comprehensive coverage of the complete data ingestion pipeline
+- Enhanced database management utilities documentation
+- Documented entry points for financial market data processing
+- Updated all architectural diagrams to match the actual implementation
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
@@ -20,7 +28,7 @@
 9. [Conclusion](#conclusion)
 
 ## Introduction
-This document describes the Data Engineering Module responsible for ingesting data and persisting it to a database. It focuses on the data pipeline entry points, ingestion logic, and database interactions within the data_eng package. The goal is to provide both a high-level understanding and detailed technical insights into how data flows through the module, how components interact, and where to look when diagnosing issues or extending functionality.
+This document describes the Data Engineering Module responsible for ingesting data and persisting it to a database. The module has been newly implemented as a complete data engineering subsystem with a full data ingestion pipeline, database management utilities, and entry points specifically designed for financial market data processing. It focuses on the data pipeline entry points, ingestion logic, and database interactions within the data_eng package. The goal is to provide both a high-level understanding and detailed technical insights into how data flows through the module, how components interact, and where to look when diagnosing issues or extending functionality.
 
 ## Project Structure
 The data engineering module is implemented as a Python package under data_eng with the following key files:
