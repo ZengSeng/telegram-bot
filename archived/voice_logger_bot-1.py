@@ -22,7 +22,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 # CONFIG — edit these
 # ---------------------------------------------------------------------------
 
-BOT_TOKEN = "8786439112:AAHyi_EkUYf5xRnXz38URG-u6-V2aWK2JB8"          # from @BotFather
+BOT_TOKEN = ""          # from @BotFather
 
 WHISPER_BIN = r"C:\repo\whisper.cpp\build\bin\Release\whisper-cli.exe"   # path to compiled whisper.cpp binary
 WHISPER_MODEL = r"C:\repo\whisper.cpp\ggml-base.en.bin"  # path to downloaded model
