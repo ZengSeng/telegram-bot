@@ -15,6 +15,8 @@ from stock_bot.config import (
     BOT_TOKEN,
     DEFAULT_SYSTEM_PROMPT,
     LOCAL_TIMEZONE,
+    PIPELINE_HOUR,
+    PIPELINE_MINUTE,
     SUMMARY_HOUR,
     SUMMARY_MINUTE,
     SYSTEM_PROMPT_FILE,
@@ -46,8 +48,12 @@ def main() -> None:
     app.add_handler(MessageHandler(filters.VOICE, handlers.handle_voice))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.handle_text))
 
-    # Schedule daily portfolio summary (local time)
+    # Schedule daily data pipeline (local time) — runs before summary
     tz = ZoneInfo(LOCAL_TIMEZONE)
+    pipeline_time = dt.time(hour=PIPELINE_HOUR, minute=PIPELINE_MINUTE, tzinfo=tz)
+    app.job_queue.run_daily(handlers.run_pipeline_job, time=pipeline_time)
+
+    # Schedule daily portfolio summary (local time)
     summary_time = dt.time(hour=SUMMARY_HOUR, minute=SUMMARY_MINUTE, tzinfo=tz)
     app.job_queue.run_daily(handlers.send_daily_summary, time=summary_time)
 

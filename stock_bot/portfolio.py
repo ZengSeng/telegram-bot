@@ -9,49 +9,109 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-import yfinance as yf
+
+from data_eng.db import get_connection
 
 from .config import log
 from .trades import load_watchlist, read_trades
 
 
 # ---------------------------------------------------------------------------
-# yfinance helpers
+# DuckDB price helpers
 # ---------------------------------------------------------------------------
 
 def get_usd_nzd_rate() -> float:
-    """Fetch the current USD/NZD exchange rate."""
+    """Get USD/NZD rate from DuckDB (NZDUSD=X close). Falls back to yfinance."""
     try:
+        conn = get_connection()
+        row = conn.execute(
+            "SELECT close FROM daily_prices WHERE ticker = 'NZDUSD=X' ORDER BY date DESC LIMIT 1"
+        ).fetchone()
+        conn.close()
+        if row and row[0]:
+            return 1.0 / float(row[0])  # NZDUSD is USD per 1 NZD; invert for NZD per USD
+    except Exception as e:
+        log.warning("DuckDB USD/NZD read failed: %s", e)
+
+    # Fallback to yfinance if DB has no data
+    try:
+        import yfinance as yf
         ticker_obj = yf.Ticker("NZDUSD=X")
         rate = ticker_obj.fast_info.get("lastPrice") or ticker_obj.fast_info.get("last_price")
         if rate:
-            return 1.0 / float(rate)  # NZDUSD is NZD per 1 USD... actually it's USD per NZD
+            return 1.0 / float(rate)
     except Exception as e:
-        log.warning("Failed to fetch USD/NZD rate: %s", e)
+        log.warning("Fallback USD/NZD fetch failed: %s", e)
     return 0.0
 
 
 def get_current_prices(tickers: list[str]) -> dict[str, float]:
-    """Fetch the latest price for each ticker. Returns {ticker: price}."""
+    """Get latest close price for each ticker from DuckDB. Returns {ticker: price}."""
+    if not tickers:
+        return {}
     prices = {}
-    for t in tickers:
-        try:
-            ticker_obj = yf.Ticker(t)
-            price = ticker_obj.fast_info.get("lastPrice") or ticker_obj.fast_info.get("last_price")
-            if price:
-                prices[t] = float(price)
-        except Exception as e:
-            log.warning("Failed to fetch price for %s: %s", t, e)
+    try:
+        conn = get_connection()
+        placeholders = ", ".join(["?"] * len(tickers))
+        rows = conn.execute(
+            f"""SELECT ticker, close FROM daily_prices
+                WHERE (ticker, date) IN (
+                    SELECT ticker, MAX(date) FROM daily_prices
+                    WHERE ticker IN ({placeholders})
+                    GROUP BY ticker
+                )""",
+            tickers,
+        ).fetchall()
+        conn.close()
+        for row in rows:
+            if row[1] is not None:
+                prices[row[0]] = float(row[1])
+    except Exception as e:
+        log.warning("DuckDB price read failed: %s", e)
     return prices
 
 
-def get_ticker_name(ticker: str) -> str:
-    """Get the short name for a ticker."""
+def get_price_targets(tickers: list[str]) -> dict[str, float]:
+    """Get latest Consensus target_price from analyst_targets. Returns {ticker: target}."""
+    if not tickers:
+        return {}
+    targets = {}
     try:
-        info = yf.Ticker(ticker).info
-        return info.get("shortName", ticker)
+        conn = get_connection()
+        placeholders = ", ".join(["?"] * len(tickers))
+        rows = conn.execute(
+            f"""SELECT ticker, target_price FROM analyst_targets
+                WHERE analyst = 'Consensus'
+                  AND (ticker, date_fetched) IN (
+                      SELECT ticker, MAX(date_fetched) FROM analyst_targets
+                      WHERE analyst = 'Consensus' AND ticker IN ({placeholders})
+                      GROUP BY ticker
+                  )""",
+            tickers,
+        ).fetchall()
+        conn.close()
+        for row in rows:
+            if row[1] is not None:
+                targets[row[0]] = float(row[1])
+    except Exception as e:
+        log.warning("DuckDB target read failed: %s", e)
+    return targets
+
+
+def get_ticker_name(ticker: str) -> str:
+    """Get the company name from DuckDB fundamentals."""
+    try:
+        conn = get_connection()
+        row = conn.execute(
+            "SELECT name FROM fundamentals WHERE ticker = ? ORDER BY date_fetched DESC LIMIT 1",
+            [ticker],
+        ).fetchone()
+        conn.close()
+        if row and row[0]:
+            return row[0]
     except Exception:
-        return ticker
+        pass
+    return ticker
 
 
 # ---------------------------------------------------------------------------
@@ -255,6 +315,7 @@ def build_portfolio_summary() -> str:
     trades = read_trades()
     watchlist = load_watchlist()
     prices = get_current_prices(watchlist)
+    targets = get_price_targets(watchlist)
     portfolio = compute_portfolio(trades) if trades else {}
     usd_nzd = get_usd_nzd_rate()
 
@@ -299,7 +360,9 @@ def build_portfolio_summary() -> str:
         mv_str = f"${market_value:,.2f}"
 
         lines.append(f"<b>{ticker}'s</b> Price:   {price_str} ({change_str}) {indicator}")
-        lines.append(f"  Avg Cost:         {avg_str}")
+        target = targets.get(ticker)
+        target_str = f" | Target: ${target:,.2f}" if target else ""
+        lines.append(f"  Avg Cost:         {avg_str}{target_str}")
         lines.append(f"  Market Val:      {mv_str} ({shares:.0f} shares)")
         lines.append("")
 
@@ -338,19 +401,45 @@ def get_chart_tickers() -> list[str]:
 
 
 def generate_price_chart(ticker: str) -> io.BytesIO | None:
-    """Generate a 90-day price chart for a ticker. Returns PNG as BytesIO or None."""
+    """Generate a 90-day price chart from DuckDB. Returns PNG as BytesIO or None."""
     try:
-        hist = yf.Ticker(ticker).history(period="90d")
-        if hist.empty:
-            log.warning("No history data for %s", ticker)
+        conn = get_connection()
+        rows = conn.execute(
+            """SELECT date, close FROM daily_prices
+               WHERE ticker = ? AND date >= CURRENT_DATE - INTERVAL 90 DAY
+               ORDER BY date""",
+            [ticker],
+        ).fetchall()
+        conn.close()
+
+        if not rows:
+            log.warning("No price history in DB for %s", ticker)
             return None
 
+        dates = [r[0] for r in rows]
+        closes = [r[1] for r in rows]
+        last_close = closes[-1]
+
         fig, ax = plt.subplots(figsize=(7, 3))
-        ax.plot(hist.index, hist["Close"], linewidth=1.2, color="#1a73e8")
-        ax.fill_between(hist.index, hist["Close"], alpha=0.08, color="#1a73e8")
+        ax.plot(dates, closes, linewidth=1.2, color="#1a73e8")
+        ax.fill_between(dates, closes, alpha=0.08, color="#1a73e8")
+
+        # Red horizontal line at current price
+        ax.axhline(y=last_close, color="red", linewidth=0.8, linestyle="--")
+        ax.annotate(
+            f"${last_close:.2f}",
+            xy=(dates[-1], last_close),
+            fontsize=7,
+            color="red",
+            va="bottom",
+            ha="right",
+        )
+
         ax.set_title(f"{ticker} — 90D", fontsize=10, loc="left")
         ax.set_ylabel("USD", fontsize=8)
-        ax.tick_params(labelsize=7, weight='bold')
+        ax.tick_params(labelsize=7)
+        ax.set_xticklabels(ax.get_xticklabels(), weight='bold')
+        ax.set_yticklabels(ax.get_yticklabels(), weight='bold')
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
         ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
         fig.autofmt_xdate(rotation=0, ha="center")

@@ -180,6 +180,23 @@ async def send_daily_summary(context: ContextTypes.DEFAULT_TYPE) -> None:
             log.warning("Failed to send summary to %s: %s", chat_id, e)
 
 
+async def run_pipeline_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Scheduled daily data pipeline — refresh DuckDB for all watchlist tickers."""
+    import asyncio
+
+    from data_eng.pipeline import run_daily_pipeline
+
+    watchlist = load_watchlist()
+    if not watchlist:
+        log.warning("Pipeline job: watchlist empty, skipping.")
+        return
+
+    log.info("Pipeline job started for: %s", watchlist)
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, run_daily_pipeline, watchlist)
+    log.info("Pipeline job finished.")
+
+
 async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Run TradingAgents multi-agent analysis on a ticker (cached per day)."""
     if not context.args:
