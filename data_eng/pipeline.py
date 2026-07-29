@@ -14,6 +14,7 @@ from .ingest import (
     ingest_global_news,
     ingest_news,
 )
+from .summarize import generate_news_summaries
 
 log = logging.getLogger(__name__)
 
@@ -83,5 +84,13 @@ def run_daily_pipeline(tickers: list[str]) -> None:
 
     # 3. Global news
     ingest_global_news()
+
+    # 4. AI news summaries (runs last, uses local LLM)
+    log.info("Pipeline: generating AI news summaries...")
+    try:
+        results = generate_news_summaries(tickers)
+        log.info("Pipeline: summarized %d ticker(s)", len(results))
+    except Exception as e:
+        log.warning("Pipeline: news summarization failed (non-fatal): %s", e)
 
     log.info("=== Daily pipeline complete ===")

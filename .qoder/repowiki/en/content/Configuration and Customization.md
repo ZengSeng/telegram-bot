@@ -8,14 +8,17 @@
 - [analysis/runner.py](file://analysis/runner.py)
 - [data_eng/db.py](file://data_eng/db.py)
 - [stock_bot/config.py](file://stock_bot/config.py)
+- [data_eng/pipeline.py](file://data_eng/pipeline.py)
+- [data_eng/ingest.py](file://data_eng/ingest.py)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Updated dependency management section to reflect new requirements.txt dependencies
-- Added information about enhanced data processing and analysis capabilities
-- Updated core dependencies table with new libraries for data processing
-- Enhanced customization scenarios to include data analysis integration
+- Added comprehensive data engineering pipeline configuration section with new settings for data sources, processing parameters, and scheduling configurations
+- Updated dependency management to reflect enhanced data processing capabilities with DuckDB, SQLAlchemy, and analytical libraries
+- Enhanced customization scenarios to include data engineering pipeline integration
+- Expanded database configuration options with new connection strings and optimization parameters
+- Added new environment variables for data source management and pipeline scheduling
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -23,16 +26,17 @@
 3. [Environment Variables Configuration](#environment-variables-configuration)
 4. [Bot Settings and Parameters](#bot-settings-and-parameters)
 5. [Audio Processing Configuration](#audio-processing-configuration)
-6. [Logging and Storage Configuration](#logging-and-storage-configuration)
-7. [Dependency Management](#dependency-management)
-8. [Security Considerations](#security-considerations)
-9. [Customization Scenarios](#customization-scenarios)
-10. [Troubleshooting Guide](#troubleshooting-guide)
-11. [Conclusion](#conclusion)
+6. [Data Engineering Pipeline Configuration](#data-engineering-pipeline-configuration)
+7. [Logging and Storage Configuration](#logging-and-storage-configuration)
+8. [Dependency Management](#dependency-management)
+9. [Security Considerations](#security-considerations)
+10. [Customization Scenarios](#customization-scenarios)
+11. [Troubleshooting Guide](#troubleshooting-guide)
+12. [Conclusion](#conclusion)
 
 ## Introduction
 
-The Telegram Voice Logger Bot is designed to capture, process, and store voice messages from Telegram conversations. This document provides comprehensive guidance on configuring and customizing the bot's behavior, including environment variables, audio processing parameters, logging formats, and storage locations. The bot supports flexible configuration options to adapt to different deployment scenarios and user requirements. With recent enhancements, the bot now includes expanded data processing and analysis capabilities through updated dependencies.
+The Telegram Voice Logger Bot is designed to capture, process, and store voice messages from Telegram conversations. This document provides comprehensive guidance on configuring and customizing the bot's behavior, including environment variables, audio processing parameters, logging formats, storage locations, and advanced data engineering pipeline functionality. The bot supports flexible configuration options to adapt to different deployment scenarios and user requirements. With recent enhancements, the bot now includes expanded data processing and analysis capabilities through updated dependencies and a sophisticated data engineering pipeline.
 
 ## Project Structure
 
@@ -51,11 +55,13 @@ STOCKBOT[stock_bot/]
 end
 subgraph "Configuration"
 REQ[requirements.txt]
+CONFIG[stock_bot/config.py]
 end
 subgraph "Data Storage"
 AUDIO[data/audio/]
 LOGS[data/voice_log.jsonl]
 DB[data.db]
+PIPELINE_DATA[pipeline_data/]
 end
 BOT --> LOGGER
 BOT --> AUDIO
@@ -64,6 +70,8 @@ LOGGER --> AUDIO
 LOGGER --> ANALYSIS
 ANALYSIS --> DATAENG
 DATAENG --> DB
+DATAENG --> PIPELINE_DATA
+STOCKBOT --> CONFIG
 ```
 
 **Diagram sources**
@@ -71,6 +79,7 @@ DATAENG --> DB
 - [voice_logger_bot.py:1-50](file://voice_logger_bot.py#L1-L50)
 - [analysis/runner.py:1-50](file://analysis/runner.py#L1-L50)
 - [data_eng/db.py:1-50](file://data_eng/db.py#L1-L50)
+- [stock_bot/config.py:1-50](file://stock_bot/config.py#L1-L50)
 
 **Section sources**
 - [bot.py:1-100](file://bot.py#L1-L100)
@@ -103,10 +112,20 @@ The bot uses environment variables for secure configuration management. Here are
 - **CACHE_SIZE**: Size of audio processing cache
 - **PROCESSING_THREADS**: Number of concurrent processing threads
 
+### Data Engineering Pipeline Configuration
+- **PIPELINE_ENABLED**: Enable data engineering pipeline (true/false)
+- **DATA_SOURCE_TYPE**: Type of data source (sqlite, postgresql, duckdb)
+- **DATA_SOURCE_URL**: Connection URL for data sources
+- **PIPELINE_SCHEDULE**: Cron expression for pipeline execution schedule
+- **BATCH_SIZE**: Number of records to process per batch
+- **RETRY_ATTEMPTS**: Number of retry attempts for failed operations
+- **TIMEOUT_SECONDS**: Timeout for pipeline operations in seconds
+
 ### Advanced Settings
 - **TIMEOUT_SECONDS**: Request timeout for Telegram API calls
 - **API_TIMEOUT**: Timeout for external API calls
 - **MEMORY_LIMIT**: Memory usage limit for processing tasks
+- **WORKER_PROCESSES**: Number of worker processes for parallel processing
 
 **Section sources**
 - [stock_bot/config.py:1-100](file://stock_bot/config.py#L1-L100)
@@ -140,6 +159,13 @@ The bot supports several basic settings that control its core functionality:
 - **output_formats**: Supported output formats for analysis results
 - **cache_strategy**: Caching strategy for repeated queries
 
+### Data Engineering Pipeline Settings
+- **pipeline_enabled**: Enable or disable data engineering pipeline
+- **data_source_config**: Configuration object for data sources
+- **processing_stages**: Ordered list of processing stages
+- **scheduling_config**: Schedule configuration for pipeline execution
+- **monitoring_enabled**: Enable performance monitoring and metrics collection
+
 **Section sources**
 - [bot.py:50-150](file://bot.py#L50-L150)
 - [voice_logger_bot.py:50-150](file://voice_logger_bot.py#L50-L150)
@@ -168,7 +194,8 @@ PROCESS --> CONVERT["Convert Format"]
 CONVERT --> COMPRESS["Apply Compression"]
 COMPRESS --> SAVE["Save to Storage"]
 SAVE --> ANALYZE["Run Data Analysis"]
-ANALYZE --> LOG["Update Log File"]
+ANALYZE --> PIPELINE["Execute Data Pipeline"]
+PIPELINE --> LOG["Update Log File"]
 LOG --> RESPONSE["Send Confirmation"]
 ERROR --> END["End Process"]
 RESPONSE --> END
@@ -177,6 +204,7 @@ RESPONSE --> END
 **Diagram sources**
 - [voice_logger_bot.py:100-200](file://voice_logger_bot.py#L100-L200)
 - [analysis/runner.py:1-100](file://analysis/runner.py#L1-L100)
+- [data_eng/pipeline.py:1-100](file://data_eng/pipeline.py#L1-L100)
 
 ### Audio Quality Settings
 - **bitrate**: Audio bitrate in kbps (128-320 recommended)
@@ -191,7 +219,111 @@ RESPONSE --> END
 - **metadata_extraction**: Extract audio metadata (duration, format)
 
 **Section sources**
-- [voice_logger_bot.py:150-300](file://voice_logger_bot.py#L150-L300)
+- [voice_logger_bot.py:150-300](file://voice_logger_bot.py#L150-300)
+
+## Data Engineering Pipeline Configuration
+
+The data engineering pipeline provides advanced data processing capabilities for analyzing and transforming voice message data. This section covers all configuration options for the pipeline functionality.
+
+### Pipeline Architecture
+```mermaid
+graph LR
+subgraph "Data Sources"
+AUDIO_FILES["Audio Files"]
+LOG_FILES["Log Files"]
+EXTERNAL_API["External APIs"]
+end
+subgraph "Ingestion Layer"
+INGEST["Data Ingestion"]
+VALIDATE["Data Validation"]
+TRANSFORM["Data Transformation"]
+end
+subgraph "Processing Engine"
+BATCH["Batch Processing"]
+STREAM["Stream Processing"]
+ANALYTICS["Analytics Engine"]
+end
+subgraph "Storage Layer"
+DUCKDB["DuckDB Analytics"]
+SQLITE["SQLite Storage"]
+FILE_SYSTEM["File System"]
+end
+AUDIO_FILES --> INGEST
+LOG_FILES --> INGEST
+EXTERNAL_API --> INGEST
+INGEST --> VALIDATE
+VALIDATE --> TRANSFORM
+TRANSFORM --> BATCH
+TRANSFORM --> STREAM
+BATCH --> ANALYTICS
+STREAM --> ANALYTICS
+ANALYTICS --> DUCKDB
+ANALYTICS --> SQLITE
+ANALYTICS --> FILE_SYSTEM
+```
+
+**Diagram sources**
+- [data_eng/pipeline.py:1-150](file://data_eng/pipeline.py#L1-L150)
+- [data_eng/ingest.py:1-100](file://data_eng/ingest.py#L1-L100)
+- [data_eng/db.py:1-100](file://data_eng/db.py#L1-L100)
+
+### Data Source Configuration
+Configure data sources for the pipeline using the following parameters:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `source_type` | string | sqlite | Type of data source (sqlite, postgresql, duckdb, csv) |
+| `connection_url` | string | - | Connection URL for the data source |
+| `batch_size` | integer | 1000 | Number of records to process per batch |
+| `retry_attempts` | integer | 3 | Number of retry attempts for failed operations |
+| `timeout_seconds` | integer | 30 | Timeout for data source operations |
+| `compression_enabled` | boolean | false | Enable data compression for storage |
+
+### Processing Stage Configuration
+Define processing stages for data transformation:
+
+| Stage | Purpose | Configuration Options |
+|-------|---------|----------------------|
+| `validation` | Validate data integrity | schema_validation, required_fields, data_types |
+| `transformation` | Transform data formats | field_mapping, data_cleaning, normalization |
+| `enrichment` | Add additional data | external_api_calls, lookup_tables, calculations |
+| `aggregation` | Aggregate data | group_by_fields, aggregation_functions, time_windows |
+| `export` | Export processed data | output_format, destination_path, naming_convention |
+
+### Scheduling Configuration
+Configure when and how often the pipeline should run:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `schedule_type` | string | cron | Type of scheduling (cron, interval, event-driven) |
+| `cron_expression` | string | 0 */6 * * * | Cron expression for execution schedule |
+| `interval_seconds` | integer | 3600 | Interval between executions in seconds |
+| `max_runtime_minutes` | integer | 60 | Maximum runtime before timeout |
+| `concurrent_runs` | integer | 1 | Maximum number of concurrent pipeline runs |
+| `error_handling` | string | retry | Error handling strategy (retry, skip, stop) |
+
+### Monitoring and Metrics
+Enable monitoring and collect performance metrics:
+
+| Metric Category | Metrics Collected | Storage Location |
+|----------------|-------------------|------------------|
+| `performance` | execution_time, memory_usage, cpu_utilization | metrics_store |
+| `data_quality` | record_count, error_rate, validation_failures | quality_metrics |
+| `throughput` | records_per_second, batch_completion_rate | throughput_metrics |
+| `resource_usage` | disk_io, network_bandwidth, file_descriptors | resource_metrics |
+
+### Pipeline Execution Examples
+Common pipeline execution patterns:
+
+1. **Real-time Processing**: Stream-based processing for immediate data availability
+2. **Batch Processing**: Scheduled batch jobs for large datasets
+3. **Event-driven Processing**: Triggered by specific events or data changes
+4. **Hybrid Processing**: Combination of streaming and batch processing
+
+**Section sources**
+- [stock_bot/config.py:100-200](file://stock_bot/config.py#L100-L200)
+- [data_eng/pipeline.py:1-200](file://data_eng/pipeline.py#L1-L200)
+- [data_eng/ingest.py:1-150](file://data_eng/ingest.py#L1-L150)
 
 ## Logging and Storage Configuration
 
@@ -209,7 +341,9 @@ The bot uses JSON Lines (JSONL) format for structured logging:
   "format": "mp3",
   "status": "success",
   "processing_time": 2.3,
-  "analysis_results": {}
+  "analysis_results": {},
+  "pipeline_execution_id": "exec_123456",
+  "data_quality_score": 0.95
 }
 ```
 
@@ -218,6 +352,7 @@ Audio files are organized by date and timestamp:
 - **Directory Structure**: `data/audio/YYYYMMDD_HHMMSS.ext`
 - **Naming Convention**: Timestamp-based unique filenames
 - **Metadata Files**: Optional `.txt` files with processing information
+- **Pipeline Data**: `pipeline_data/YYYYMMDD/batch_XXXXX.parquet`
 
 ### Log Rotation and Retention
 - **Max Log Size**: Maximum size before rotation (default: 10MB)
@@ -230,12 +365,15 @@ Audio files are organized by date and timestamp:
 - **PostgreSQL**: For production deployments
 - **MongoDB**: Alternative NoSQL option
 - **CSV Export**: Simple text-based export format
+- **DuckDB**: High-performance analytical database
 
 ### Enhanced Data Storage
 With the updated dependencies, the bot now supports:
 - **Structured Data Analysis**: Advanced analytics for processed audio data
 - **Performance Metrics**: Tracking processing efficiency and resource usage
 - **Audit Trails**: Comprehensive logging of all data transformations
+- **Data Lineage**: Track data flow through processing stages
+- **Quality Metrics**: Automated data quality assessment and reporting
 
 **Section sources**
 - [voice_logger_bot.py:200-400](file://voice_logger_bot.py#L200-L400)
@@ -257,6 +395,9 @@ The bot relies on several key Python libraries, with recent updates enhancing da
 | numpy | Numerical computing | Latest stable | Mathematical operations |
 | duckdb | In-memory database | Latest stable | Fast analytical queries |
 | sqlalchemy | Database ORM | Latest stable | Database abstraction layer |
+| APScheduler | Task scheduling | Latest stable | Pipeline scheduling |
+| pyarrow | Data serialization | Latest stable | Efficient data storage |
+| fastparquet | Parquet file handling | Latest stable | Columnar data format |
 
 ### Installation and Setup
 ```bash
@@ -272,6 +413,7 @@ pip install -r requirements.txt
 python -c "import telegram; print('Telegram bot module loaded')"
 python -c "import pandas; print('Pandas data processing ready')"
 python -c "import duckdb; print('DuckDB analytical engine ready')"
+python -c "import apscheduler; print('Scheduler available')"
 ```
 
 ### Adding New Dependencies
@@ -295,6 +437,8 @@ The updated requirements.txt now includes:
 - **Database Engines**: DuckDB for fast analytical queries
 - **ORM Framework**: SQLAlchemy for database operations
 - **Scientific Computing**: Additional libraries for advanced processing
+- **Task Scheduling**: APScheduler for pipeline orchestration
+- **Data Serialization**: PyArrow and FastParquet for efficient storage
 
 **Section sources**
 - [requirements.txt:1-100](file://requirements.txt#L1-L100)
@@ -330,6 +474,12 @@ The updated requirements.txt now includes:
 - **Implement proper connection pooling**
 - **Encrypt sensitive data in databases**
 - **Regular backup and disaster recovery planning**
+
+### Pipeline Security
+- **Validate all data inputs**
+- **Implement proper access controls for data sources**
+- **Monitor pipeline execution for anomalies**
+- **Secure configuration files and credentials**
 
 ### Best Practices
 - **Regular security audits**
@@ -367,7 +517,16 @@ To leverage the enhanced data processing capabilities:
 3. **Customize analysis pipeline**: Modify analysis rules and metrics
 4. **Set up reporting**: Configure output formats for analysis results
 
-### Scenario 4: Customizing Database Schema
+### Scenario 4: Configuring Data Engineering Pipeline
+To set up the data engineering pipeline:
+
+1. **Enable pipeline**: Set `PIPELINE_ENABLED=true`
+2. **Configure data sources**: Set `DATA_SOURCE_TYPE` and `DATA_SOURCE_URL`
+3. **Define processing stages**: Configure stage-specific parameters
+4. **Set up scheduling**: Configure `PIPELINE_SCHEDULE` with cron expression
+5. **Enable monitoring**: Set up metrics collection and alerting
+
+### Scenario 5: Customizing Database Schema
 For specialized data storage needs:
 
 1. **Define schema**: Create custom database models
@@ -375,7 +534,7 @@ For specialized data storage needs:
 3. **Optimize queries**: Use appropriate indexing strategies
 4. **Configure connections**: Set up connection pooling and timeouts
 
-### Scenario 5: Multi-Chat Deployment
+### Scenario 6: Multi-Chat Deployment
 For managing multiple chats:
 
 1. **Configure chat-specific settings**: Use per-chat configuration files
@@ -383,7 +542,7 @@ For managing multiple chats:
 3. **Manage separate storage**: Organize data by chat ID
 4. **Handle permissions**: Different access levels per chat
 
-### Scenario 6: Advanced Analytics Integration
+### Scenario 7: Advanced Analytics Integration
 To integrate with external analytics services:
 
 1. **Add service credentials**: Store in environment variables
@@ -391,10 +550,20 @@ To integrate with external analytics services:
 3. **Hook into processing pipeline**: Add service calls at appropriate points
 4. **Handle errors gracefully**: Implement fallback mechanisms
 
+### Scenario 8: Pipeline Performance Optimization
+For optimizing pipeline performance:
+
+1. **Adjust batch sizes**: Tune `BATCH_SIZE` based on data volume
+2. **Configure parallel processing**: Set appropriate `WORKER_PROCESSES`
+3. **Optimize database queries**: Use proper indexing and query optimization
+4. **Implement caching**: Cache frequently accessed data
+5. **Monitor resource usage**: Track CPU, memory, and I/O utilization
+
 **Section sources**
 - [bot.py:100-250](file://bot.py#L100-L250)
 - [voice_logger_bot.py:250-500](file://voice_logger_bot.py#L250-L500)
 - [analysis/runner.py:1-100](file://analysis/runner.py#L1-L100)
+- [data_eng/pipeline.py:1-200](file://data_eng/pipeline.py#L1-L200)
 
 ## Troubleshooting Guide
 
@@ -424,11 +593,19 @@ To integrate with external analytics services:
 - **Library compatibility**: Ensure all dependencies are properly installed
 - **Query performance**: Monitor slow queries and optimize as needed
 
+#### Pipeline Execution Problems
+- **Schedule conflicts**: Check for overlapping pipeline executions
+- **Data source connectivity**: Verify all configured data sources are accessible
+- **Processing timeouts**: Adjust timeout settings for large datasets
+- **Resource exhaustion**: Monitor system resources during pipeline execution
+- **Error handling**: Review error handling strategies and retry logic
+
 #### Performance Issues
 - **Resource monitoring**: Monitor CPU and memory usage
 - **Database optimization**: Optimize queries and indexing
 - **Caching strategy**: Implement appropriate caching mechanisms
 - **Concurrent processing**: Adjust thread pool sizes
+- **Pipeline tuning**: Optimize batch sizes and parallel processing settings
 
 ### Debugging Techniques
 - **Enable debug logging**: Set `LOG_LEVEL=DEBUG` for verbose output
@@ -436,6 +613,7 @@ To integrate with external analytics services:
 - **Monitor system resources**: Track CPU, memory, and disk usage
 - **Profile performance**: Identify bottlenecks in processing pipeline
 - **Database query profiling**: Analyze slow queries and execution plans
+- **Pipeline tracing**: Enable detailed tracing for pipeline execution
 
 ### Recovery Procedures
 - **Backup restoration**: Restore from latest backup if data corruption occurs
@@ -443,13 +621,14 @@ To integrate with external analytics services:
 - **Configuration rollback**: Revert to known good configuration
 - **Data migration**: Handle schema changes and data migrations
 - **Dependency recovery**: Reinstall dependencies if corrupted
+- **Pipeline recovery**: Resume interrupted pipeline executions
 
 **Section sources**
 - [data_eng/db.py:50-150](file://data_eng/db.py#L50-L150)
 
 ## Conclusion
 
-The Telegram Voice Logger Bot provides a robust and configurable platform for capturing and processing voice messages from Telegram conversations. With the recent updates to enhance data processing and analysis capabilities, the bot now offers significantly expanded functionality for advanced data analysis and reporting. By understanding the configuration options and customization capabilities outlined in this document, users can tailor the bot to meet their specific requirements while maintaining security and performance standards.
+The Telegram Voice Logger Bot provides a robust and configurable platform for capturing and processing voice messages from Telegram conversations. With the recent updates to enhance data processing and analysis capabilities, the bot now offers significantly expanded functionality for advanced data analysis, data engineering pipelines, and comprehensive reporting. By understanding the configuration options and customization capabilities outlined in this document, users can tailor the bot to meet their specific requirements while maintaining security and performance standards.
 
 Key takeaways include:
 - Proper environment variable management for secure configuration
@@ -458,5 +637,7 @@ Key takeaways include:
 - Scalable architecture supporting various deployment scenarios
 - Strong security practices for protecting sensitive data
 - Enhanced data processing capabilities with modern analytical tools
+- Sophisticated data engineering pipeline for advanced data transformations
+- Robust scheduling and monitoring capabilities for production deployments
 
-With the guidance provided here, users can effectively deploy, configure, and maintain their Telegram Voice Logger Bot in production environments while ensuring optimal performance, security, and advanced data analysis capabilities.
+With the guidance provided here, users can effectively deploy, configure, and maintain their Telegram Voice Logger Bot in production environments while ensuring optimal performance, security, and advanced data analysis capabilities. The addition of the data engineering pipeline transforms the bot from a simple voice logger into a comprehensive data processing platform capable of handling complex analytical workflows.

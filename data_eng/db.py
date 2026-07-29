@@ -90,6 +90,13 @@ CREATE TABLE IF NOT EXISTS analyst_targets (
     PRIMARY KEY (ticker, date_fetched, analyst)
 );
 
+CREATE TABLE IF NOT EXISTS news_summaries (
+    ticker      VARCHAR NOT NULL,
+    date        DATE NOT NULL,
+    summary     VARCHAR NOT NULL,
+    PRIMARY KEY (ticker, date)
+);
+
 CREATE TABLE IF NOT EXISTS ticker_enriched (
     ticker              VARCHAR NOT NULL,
     date_fetched        DATE NOT NULL,

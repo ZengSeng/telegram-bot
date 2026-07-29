@@ -5,21 +5,25 @@
 - [bot.py](file://bot.py)
 - [voice_logger_bot.py](file://voice_logger_bot.py)
 - [requirements.txt](file://requirements.txt)
-- [SETUP.md](file://notes/setup.md)
-- [MyNotes.md](file://notes/bot-guide.md)
+- [setup.md](file://notes/setup.md)
+- [daily-ops.md](file://notes/daily-ops.md)
+- [bot-guide.md](file://notes/bot-guide.md)
 - [test.py](file://archived/test.py)
 - [voice_logger_bot-1.py](file://archived/voice_logger_bot-1.py)
 - [errors.txt](file://dump/errors.txt)
+- [pipeline.py](file://data_eng/pipeline.py)
+- [ingest.py](file://data_eng/ingest.py)
+- [db.py](file://data_eng/db.py)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Enhanced error management section with comprehensive troubleshooting information from dump/errors.txt updates
-- Updated logging failures section to reflect improved automated error detection capabilities
-- Added new section on advanced error diagnosis techniques and pattern recognition
-- Streamlined debugging techniques to leverage enhanced built-in error handling mechanisms
-- Removed references to manual error tracking files like errors.txt as they are now handled automatically
-- Expanded FAQ section with questions about the new error handling system
+- Added comprehensive troubleshooting section for the new data engineering pipeline functionality
+- Updated operational procedures to reflect refined daily operations with 10 additions and 5 deletions
+- Enhanced error management documentation to include pipeline-specific troubleshooting
+- Added new sections covering data ingestion issues, database connectivity problems, and pipeline monitoring
+- Updated FAQ section with questions about the new data engineering capabilities
+- Integrated portfolio enhancement troubleshooting into existing error management workflows
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -28,18 +32,19 @@
 4. [Audio Processing Errors](#audio-processing-errors)
 5. [File Storage Issues](#file-storage-issues)
 6. [Enhanced Error Management](#enhanced-error-management)
-7. [Logging Failures](#logging-failures)
-8. [Debugging Techniques](#debugging-techniques)
-9. [Performance Optimization](#performance-optimization)
-10. [Data Recovery](#data-recovery)
-11. [FAQ Section](#faq-section)
-12. [Historical Context and Known Issues](#historical-context-and-known-issues)
+7. [Data Engineering Pipeline Issues](#data-engineering-pipeline-issues)
+8. [Logging Failures](#logging-failures)
+9. [Debugging Techniques](#debugging-techniques)
+10. [Performance Optimization](#performance-optimization)
+11. [Data Recovery](#data-recovery)
+12. [FAQ Section](#faq-section)
+13. [Historical Context and Known Issues](#historical-context-and-known-issues)
 
 ## Introduction
 
-This troubleshooting guide addresses common issues encountered when running the Telegram Voice Logger Bot. The bot is designed to capture, process, and store voice messages from Telegram users. **Updated**: Recent improvements include significantly enhanced error handling mechanisms that automatically detect and recover from common failure scenarios, reducing the need for manual intervention and providing more robust automatic recovery capabilities.
+This troubleshooting guide addresses common issues encountered when running the Telegram Voice Logger Bot. The bot is designed to capture, process, and store voice messages from Telegram users. **Updated**: Recent improvements include significantly enhanced error handling mechanisms that automatically detect and recover from common failure scenarios, reducing the need for manual intervention and providing more robust automatic recovery capabilities. Additionally, the integration of a new data engineering pipeline has introduced new operational procedures and troubleshooting requirements.
 
-The document provides systematic solutions for setup problems, connectivity issues, audio processing errors, file storage problems, and logging failures. It also includes advanced debugging techniques and performance optimization strategies tailored to the improved error management system that eliminates manual error tracking through intelligent automation.
+The document provides systematic solutions for setup problems, connectivity issues, audio processing errors, file storage problems, logging failures, and data pipeline issues. It also includes advanced debugging techniques and performance optimization strategies tailored to the improved error management system that eliminates manual error tracking through intelligent automation.
 
 ## Common Setup Issues
 
@@ -70,7 +75,7 @@ The document provides systematic solutions for setup problems, connectivity issu
 
 **Section sources**
 - [requirements.txt](file://requirements.txt)
-- [SETUP.md](file://notes/setup.md)
+- [setup.md](file://notes/setup.md)
 
 ### Permission Issues
 
@@ -98,7 +103,7 @@ The document provides systematic solutions for setup problems, connectivity issu
    - Check privacy mode settings in bot configuration
 
 **Section sources**
-- [SETUP.md](file://notes/setup.md)
+- [setup.md](file://notes/setup.md)
 
 ### Initial Configuration Problems
 
@@ -121,8 +126,8 @@ The document provides systematic solutions for setup problems, connectivity issu
    - Verify file paths use correct separators for the operating system
 
 **Section sources**
-- [SETUP.md](file://notes/setup.md)
-- [MyNotes.md](file://notes/bot-guide.md)
+- [setup.md](file://notes/setup.md)
+- [bot-guide.md](file://notes/bot-guide.md)
 
 ## Telegram API Connectivity Problems
 
@@ -423,6 +428,172 @@ J --> N[Continue with Limited Functionality]
 
 **Section sources**
 - [voice_logger_bot.py](file://voice_logger_bot.py)
+
+## Data Engineering Pipeline Issues
+
+**Updated**: New section addressing the data engineering pipeline functionality introduced in recent updates. The pipeline provides automated data ingestion, processing, and storage capabilities for enhanced portfolio management and analytics.
+
+### Pipeline Initialization Problems
+
+**Problem**: Data engineering pipeline fails to start or initialize properly.
+
+**Symptoms**:
+- Pipeline startup errors or timeouts
+- Database connection failures during initialization
+- Configuration loading errors
+- Missing required dependencies
+
+**Solutions**:
+1. **Environment Setup**:
+   - Verify all required Python packages are installed
+   - Check database connectivity and credentials
+   - Ensure proper file permissions for data directories
+   - Validate configuration file syntax and values
+
+2. **Database Configuration**:
+   - Test database connection independently
+   - Verify schema migration status
+   - Check database user permissions
+   - Ensure sufficient disk space for data storage
+
+3. **Pipeline Dependencies**:
+   - Install required system dependencies (ffmpeg, sox)
+   - Verify Python version compatibility
+   - Check for conflicting package versions
+
+**Section sources**
+- [pipeline.py](file://data_eng/pipeline.py)
+- [ingest.py](file://data_eng/ingest.py)
+- [db.py](file://data_eng/db.py)
+
+### Data Ingestion Failures
+
+**Problem**: Data ingestion process fails to process incoming data correctly.
+
+**Symptoms**:
+- Data parsing errors or malformed input
+- Missing or incorrect field mappings
+- Duplicate data entries
+- Data validation failures
+
+**Solutions**:
+1. **Input Validation**:
+   - Verify data format compliance
+   - Check field mapping configurations
+   - Implement data quality checks
+   - Add input sanitization measures
+
+2. **Processing Errors**:
+   - Review ingestion logs for specific error details
+   - Check memory usage during large data processing
+   - Verify network connectivity for remote data sources
+   - Implement retry mechanisms for transient failures
+
+3. **Data Transformation**:
+   - Validate transformation rules and logic
+   - Check date/time format conversions
+   - Verify numeric precision and rounding
+   - Test edge cases and boundary conditions
+
+**Section sources**
+- [ingest.py](file://data_eng/ingest.py)
+
+### Database Connectivity Issues
+
+**Problem**: Database connection failures or query execution problems.
+
+**Symptoms**:
+- Connection timeout errors
+- Query execution failures
+- Transaction rollback issues
+- Deadlock or locking problems
+
+**Solutions**:
+1. **Connection Management**:
+   - Verify database server accessibility
+   - Check connection pool configuration
+   - Monitor connection lifecycle and cleanup
+   - Implement connection health checks
+
+2. **Query Optimization**:
+   - Review slow query logs
+   - Optimize database indexes
+   - Implement query caching where appropriate
+   - Use connection pooling effectively
+
+3. **Transaction Handling**:
+   - Implement proper transaction boundaries
+   - Handle partial failures gracefully
+   - Add retry logic for transient database errors
+   - Monitor transaction duration and resource usage
+
+**Section sources**
+- [db.py](file://data_eng/db.py)
+
+### Pipeline Monitoring and Health Checks
+
+**Problem**: Difficulty monitoring pipeline health and detecting issues early.
+
+**Symptoms**:
+- Unknown pipeline status
+- Delayed error detection
+- Performance degradation without alerts
+- Resource consumption spikes
+
+**Solutions**:
+1. **Health Monitoring**:
+   - Implement pipeline health check endpoints
+   - Monitor key performance indicators (KPIs)
+   - Track data throughput and latency metrics
+   - Set up automated alerts for critical failures
+
+2. **Logging and Observability**:
+   - Enable detailed pipeline logging
+   - Implement structured logging format
+   - Add correlation IDs for request tracing
+   - Create dashboards for real-time monitoring
+
+3. **Automated Recovery**:
+   - Implement self-healing mechanisms
+   - Add circuit breaker patterns for failing services
+   - Configure automatic restart policies
+   - Set up graceful degradation modes
+
+**Section sources**
+- [pipeline.py](file://data_eng/pipeline.py)
+- [daily-ops.md](file://notes/daily-ops.md)
+
+### Portfolio Enhancement Troubleshooting
+
+**Problem**: Issues with portfolio management features and enhancements.
+
+**Symptoms**:
+- Portfolio calculation errors
+- Asset allocation discrepancies
+- Performance reporting inaccuracies
+- Data synchronization problems
+
+**Solutions**:
+1. **Portfolio Calculations**:
+   - Verify calculation algorithms and formulas
+   - Check data source accuracy and completeness
+   - Validate time series data alignment
+   - Implement calculation result validation
+
+2. **Asset Management**:
+   - Verify asset metadata and classifications
+   - Check price data feed connectivity
+   - Validate currency conversion rates
+   - Monitor asset rebalancing triggers
+
+3. **Reporting Issues**:
+   - Debug report generation processes
+   - Verify data aggregation logic
+   - Check formatting and export functions
+   - Validate report accuracy against source data
+
+**Section sources**
+- [daily-ops.md](file://notes/daily-ops.md)
 
 ## Logging Failures
 
@@ -741,8 +912,8 @@ A: Review the log files in the data directory and use the built-in monitoring co
 A: No, the enhanced error handling system automatically manages error tracking and recovery. Manual error file maintenance is no longer required as the system handles these tasks intelligently.
 
 **Section sources**
-- [SETUP.md](file://notes/setup.md)
-- [MyNotes.md](file://notes/bot-guide.md)
+- [setup.md](file://notes/setup.md)
+- [bot-guide.md](file://notes/bot-guide.md)
 
 ### Technical Questions
 
@@ -781,6 +952,24 @@ A: The bot includes built-in health checks, log analysis tools, and performance 
 **Section sources**
 - [voice_logger_bot.py](file://voice_logger_bot.py)
 
+### Data Engineering Pipeline Questions
+
+**Q: How do I troubleshoot data pipeline failures?**
+A: Check the pipeline logs for specific error details, verify database connectivity, and validate data input formats. Use the health check endpoints to monitor pipeline status and identify bottlenecks.
+
+**Q: What should I do if the data ingestion process fails?**
+A: Review the ingestion logs for parsing errors, verify data source connectivity, and check field mapping configurations. Implement retry mechanisms for transient failures and validate data quality before processing.
+
+**Q: How can I monitor the data engineering pipeline health?**
+A: Use the built-in health check endpoints, monitor key performance indicators, and set up automated alerts for critical failures. Review structured logs and create dashboards for real-time monitoring.
+
+**Q: How do I handle portfolio calculation errors?**
+A: Verify calculation algorithms and formulas, check data source accuracy, and validate time series data alignment. Implement calculation result validation and debug report generation processes.
+
+**Section sources**
+- [daily-ops.md](file://notes/daily-ops.md)
+- [pipeline.py](file://data_eng/pipeline.py)
+
 ## Historical Context and Known Issues
 
 ### Version Evolution
@@ -799,7 +988,7 @@ A: The bot includes built-in health checks, log analysis tools, and performance 
    - Document breaking changes for team members
 
 **Section sources**
-- [archived/voice_logger_bot-1.py](file://archived/voice_logger_bot-1.py)
+- [voice_logger_bot-1.py](file://archived/voice_logger_bot-1.py)
 
 ### Known Issues and Workarounds
 
@@ -822,8 +1011,8 @@ A: The bot includes built-in health checks, log analysis tools, and performance 
    - Handle concurrent access gracefully
 
 **Section sources**
-- [archived/test.py](file://archived/test.py)
-- [archived/voice_logger_bot-1.py](file://archived/voice_logger_bot-1.py)
+- [test.py](file://archived/test.py)
+- [voice_logger_bot-1.py](file://archived/voice_logger_bot-1.py)
 
 ### Community Solutions
 
@@ -841,7 +1030,7 @@ A: The bot includes built-in health checks, log analysis tools, and performance 
    - Participate in community discussions
 
 **Section sources**
-- [MyNotes.md](file://notes/bot-guide.md)
+- [bot-guide.md](file://notes/bot-guide.md)
 
 ### Error Handling Evolution
 
@@ -860,8 +1049,8 @@ A: The bot includes built-in health checks, log analysis tools, and performance 
 
 ## Conclusion
 
-This troubleshooting guide provides comprehensive solutions for common issues encountered with the Telegram Voice Logger Bot. **Updated**: The recent enhancements to error handling mechanisms significantly improve the bot's reliability and eliminate the need for manual intervention and error file maintenance. By systematically addressing setup problems, connectivity issues, audio processing errors, and file storage problems, users can maintain reliable bot operation with greater confidence.
+This troubleshooting guide provides comprehensive solutions for common issues encountered with the Telegram Voice Logger Bot. **Updated**: The recent enhancements to error handling mechanisms significantly improve the bot's reliability and eliminate the need for manual intervention and error file maintenance. The addition of the data engineering pipeline introduces new operational procedures and troubleshooting requirements that have been integrated into this guide.
 
-The improved error management system automatically handles many common failure scenarios, provides better diagnostic information, and offers graceful degradation when issues occur. Combined with the included debugging techniques and performance optimization strategies, these enhancements ensure optimal bot performance and easier maintenance. The elimination of manual error tracking files like `errors.txt` represents a major step forward in operational simplicity and system reliability.
+By systematically addressing setup problems, connectivity issues, audio processing errors, file storage problems, data pipeline issues, and logging failures, users can maintain reliable bot operation with greater confidence. The improved error management system automatically handles many common failure scenarios, provides better diagnostic information, and offers graceful degradation when issues occur.
 
-For ongoing support, consult the archived versions for historical context and refer to the community resources for additional solutions and best practices. Regular monitoring, proper logging, and proactive maintenance will help prevent most issues before they impact bot operation, while the enhanced error handling provides safety nets for unexpected problems.
+The elimination of manual error tracking files like `errors.txt` represents a major step forward in operational simplicity and system reliability. Combined with the included debugging techniques, performance optimization strategies, and new data engineering pipeline troubleshooting, these enhancements ensure optimal bot performance and easier maintenance. For ongoing support, consult the archived versions for historical context and refer to the community resources for additional solutions and best practices. Regular monitoring, proper logging, and proactive maintenance will help prevent most issues before they impact bot operation, while the enhanced error handling provides safety nets for unexpected problems.
