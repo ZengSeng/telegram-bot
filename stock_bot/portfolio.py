@@ -71,6 +71,33 @@ def get_current_prices(tickers: list[str]) -> dict[str, float]:
     return prices
 
 
+def get_prices_n_days_ago(tickers: list[str], days: int = 30) -> dict[str, float]:
+    """Get close price from ~N days ago for each ticker from DuckDB. Returns {ticker: price}."""
+    if not tickers:
+        return {}
+    prices = {}
+    cutoff = (dt.date.today() - dt.timedelta(days=days)).isoformat()
+    try:
+        conn = get_connection()
+        placeholders = ", ".join(["?"] * len(tickers))
+        rows = conn.execute(
+            f"""SELECT ticker, close FROM daily_prices
+                WHERE (ticker, date) IN (
+                    SELECT ticker, MAX(date) FROM daily_prices
+                    WHERE ticker IN ({placeholders}) AND date <= ?
+                    GROUP BY ticker
+                )""",
+            [*tickers, cutoff],
+        ).fetchall()
+        conn.close()
+        for row in rows:
+            if row[1] is not None:
+                prices[row[0]] = float(row[1])
+    except Exception as e:
+        log.warning("DuckDB %d-day price read failed: %s", days, e)
+    return prices
+
+
 def get_price_targets(tickers: list[str]) -> dict[str, float]:
     """Get latest Consensus target_price from analyst_targets. Returns {ticker: target}."""
     if not tickers:
@@ -327,11 +354,20 @@ def build_portfolio_summary() -> str:
     watched_only = [t for t in sorted(watchlist) if t not in portfolio_tickers]
 
     if watched_only:
+        prices_30d = get_prices_n_days_ago(watched_only, days=30)
         lines.append("👁 <b>Watchlist</b>")
         for ticker in watched_only:
             current_price = prices.get(ticker)
             price_str = f"${current_price:,.2f}" if current_price else "N/A"
-            lines.append(f"  <b>{ticker}</b>: {price_str}")
+            target = targets.get(ticker)
+            target_str = f" | Target: ${target:,.0f}" if target else ""
+            price_30d = prices_30d.get(ticker)
+            if price_30d and current_price:
+                chg_30d = (current_price - price_30d) / price_30d * 100
+                chg_str = f" | 30D: {'+' if chg_30d >= 0 else ''}{chg_30d:.0f}%"
+            else:
+                chg_str = ""
+            lines.append(f"<b>{ticker}</b>: {price_str}{target_str}{chg_str}")
         lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         lines.append("")
 
@@ -435,7 +471,7 @@ def generate_price_chart(ticker: str) -> io.BytesIO | None:
             ha="right",
         )
 
-        ax.set_title(f"{ticker} — 90D", fontsize=10, loc="left")
+        ax.set_title(f"{ticker} — 90D", fontsize=12, loc="left", weight="bold")
         ax.set_ylabel("USD", fontsize=8)
         ax.tick_params(labelsize=7)
         ax.set_xticklabels(ax.get_xticklabels(), weight='bold')
