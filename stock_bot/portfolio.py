@@ -1,9 +1,14 @@
 """Portfolio calculations: FIFO matching, price fetching, and summary builder."""
 
 import datetime as dt
+import io
 import re
 from collections import defaultdict
 
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 import yfinance as yf
 
 from .config import log
@@ -246,19 +251,30 @@ def compute_fifo_details(trades: list[dict], ticker: str) -> dict:
 # ---------------------------------------------------------------------------
 
 def build_portfolio_summary() -> str:
-    """Build the portfolio summary message."""
+    """Build the portfolio summary message (HTML parse mode)."""
     trades = read_trades()
-    if not trades:
-        return "No trades recorded yet. Send a photo of a trade confirmation to get started!"
-
     watchlist = load_watchlist()
     prices = get_current_prices(watchlist)
-    portfolio = compute_portfolio(trades)
+    portfolio = compute_portfolio(trades) if trades else {}
     usd_nzd = get_usd_nzd_rate()
 
     today = dt.date.today().strftime("%Y-%m-%d")
     lines = [f"📊 Portfolio Summary — {today}", ""]
 
+    # --- Watchlist-only tickers (monitored but no open position) ---
+    portfolio_tickers = {t for t, s in portfolio.items() if s["shares"] > 0}
+    watched_only = [t for t in sorted(watchlist) if t not in portfolio_tickers]
+
+    if watched_only:
+        lines.append("👁 <b>Watchlist</b>")
+        for ticker in watched_only:
+            current_price = prices.get(ticker)
+            price_str = f"${current_price:,.2f}" if current_price else "N/A"
+            lines.append(f"  <b>{ticker}</b>: {price_str}")
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append("")
+
+    # --- Portfolio holdings ---
     total_invested = 0.0
     total_market_value = 0.0
 
@@ -282,12 +298,9 @@ def build_portfolio_summary() -> str:
         avg_str = f"${avg_cost:,.2f}"
         mv_str = f"${market_value:,.2f}"
 
-        lines.append(f"{ticker}")
-        lines.append(f"  Daily Price:      {price_str}")
+        lines.append(f"<b>{ticker}'s</b> Price:   {price_str} ({change_str}) {indicator}")
         lines.append(f"  Avg Cost:         {avg_str}")
-        lines.append(f"  Shares:             {shares:.0f}")
-        lines.append(f"  Market Value:  {mv_str}")
-        lines.append(f"  Change:           {change_str} {indicator}")
+        lines.append(f"  Market Val:      {mv_str} ({shares:.0f} shares)")
         lines.append("")
 
     unrealized = total_market_value - total_invested
@@ -305,3 +318,50 @@ def build_portfolio_summary() -> str:
     lines.append(f"Unrealized P&L:   {pnl_str} ({sign}{abs(unrealized_pct):.2f}%) {total_indicator}")
 
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Chart generation
+# ---------------------------------------------------------------------------
+
+def get_chart_tickers() -> list[str]:
+    """Return ordered tickers to chart: watchlist-only first, then portfolio."""
+    trades = read_trades()
+    watchlist = load_watchlist()
+    portfolio = compute_portfolio(trades) if trades else {}
+    portfolio_tickers = {t for t, s in portfolio.items() if s["shares"] > 0}
+    watched_only = [t for t in sorted(watchlist) if t not in portfolio_tickers]
+    held = [t for t in sorted(portfolio_tickers) if t in watchlist]
+    # Also include portfolio tickers not in watchlist
+    held += [t for t in sorted(portfolio_tickers) if t not in watchlist]
+    return watched_only + held
+
+
+def generate_price_chart(ticker: str) -> io.BytesIO | None:
+    """Generate a 90-day price chart for a ticker. Returns PNG as BytesIO or None."""
+    try:
+        hist = yf.Ticker(ticker).history(period="90d")
+        if hist.empty:
+            log.warning("No history data for %s", ticker)
+            return None
+
+        fig, ax = plt.subplots(figsize=(7, 3))
+        ax.plot(hist.index, hist["Close"], linewidth=1.2, color="#1a73e8")
+        ax.fill_between(hist.index, hist["Close"], alpha=0.08, color="#1a73e8")
+        ax.set_title(f"{ticker} — 90D", fontsize=10, loc="left")
+        ax.set_ylabel("USD", fontsize=8)
+        ax.tick_params(labelsize=7, weight='bold')
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d"))
+        ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
+        fig.autofmt_xdate(rotation=0, ha="center")
+        ax.grid(True, alpha=0.3)
+        fig.tight_layout(pad=0.5)
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=100)
+        plt.close(fig)
+        buf.seek(0)
+        return buf
+    except Exception as e:
+        log.warning("Chart generation failed for %s: %s", ticker, e)
+        return None

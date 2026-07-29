@@ -21,6 +21,8 @@ from .portfolio import (
     build_portfolio_summary,
     compute_fifo_details,
     extract_ticker,
+    generate_price_chart,
+    get_chart_tickers,
     get_current_prices,
 )
 from .trades import (
@@ -71,7 +73,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/system <prompt> - set system prompt\n"
         "/watch <TICKER> - add ticker to watchlist\n"
         "/unwatch <TICKER> - remove ticker\n"
-        "/summary - portfolio summary\n"
+        "/portfolio - portfolio summary\n"
         "/gains - realized/unrealized P&L\n"
         "/analyze <TICKER> - multi-agent AI analysis\n"
         "/report <TICKER> - full analysis report"
@@ -132,10 +134,29 @@ async def unwatch_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_text(f"Removed {ticker}. Watchlist: {', '.join(watchlist) if watchlist else '(empty)'}")
 
 
-async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("Fetching prices...")
+async def charts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send 90-day price charts for all tracked tickers."""
+    await update.message.reply_text("Generating charts...")
+    tickers = get_chart_tickers()
+    for ticker in tickers:
+        chart = generate_price_chart(ticker)
+        if chart:
+            await update.message.reply_photo(photo=chart)
+
+
+async def portfolio_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("Fetching prices & charts...")
+
+    # Send charts first (watchlist-only tickers appear at top)
+    tickers = get_chart_tickers()
+    for ticker in tickers:
+        chart = generate_price_chart(ticker)
+        if chart:
+            await update.message.reply_photo(photo=chart)
+
+    # Send portfolio summary text last (visible immediately)
     msg = build_portfolio_summary()
-    await update.message.reply_text(msg)
+    await update.message.reply_text(msg, parse_mode="HTML")
 
 
 async def send_daily_summary(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -144,10 +165,17 @@ async def send_daily_summary(context: ContextTypes.DEFAULT_TYPE) -> None:
     if not chat_ids:
         log.warning("No chat_ids saved — no user has run /start")
         return
+
+    tickers = get_chart_tickers()
     msg = build_portfolio_summary()
+
     for chat_id in chat_ids:
         try:
-            await context.bot.send_message(chat_id=chat_id, text=msg)
+            for ticker in tickers:
+                chart = generate_price_chart(ticker)
+                if chart:
+                    await context.bot.send_photo(chat_id=chat_id, photo=chart)
+            await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode="HTML")
         except Exception as e:
             log.warning("Failed to send summary to %s: %s", chat_id, e)
 
