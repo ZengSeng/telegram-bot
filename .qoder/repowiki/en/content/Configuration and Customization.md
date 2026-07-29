@@ -5,9 +5,17 @@
 - [bot.py](file://bot.py)
 - [voice_logger_bot.py](file://voice_logger_bot.py)
 - [requirements.txt](file://requirements.txt)
-- [SETUP.md](file://SETUP.md)
-- [MyNotes.md](file://MyNotes.md)
+- [analysis/runner.py](file://analysis/runner.py)
+- [data_eng/db.py](file://data_eng/db.py)
+- [stock_bot/config.py](file://stock_bot/config.py)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated dependency management section to reflect new requirements.txt dependencies
+- Added information about enhanced data processing and analysis capabilities
+- Updated core dependencies table with new libraries for data processing
+- Enhanced customization scenarios to include data analysis integration
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -24,7 +32,7 @@
 
 ## Introduction
 
-The Telegram Voice Logger Bot is designed to capture, process, and store voice messages from Telegram conversations. This document provides comprehensive guidance on configuring and customizing the bot's behavior, including environment variables, audio processing parameters, logging formats, and storage locations. The bot supports flexible configuration options to adapt to different deployment scenarios and user requirements.
+The Telegram Voice Logger Bot is designed to capture, process, and store voice messages from Telegram conversations. This document provides comprehensive guidance on configuring and customizing the bot's behavior, including environment variables, audio processing parameters, logging formats, and storage locations. The bot supports flexible configuration options to adapt to different deployment scenarios and user requirements. With recent enhancements, the bot now includes expanded data processing and analysis capabilities through updated dependencies.
 
 ## Project Structure
 
@@ -36,24 +44,33 @@ subgraph "Main Application"
 BOT[bot.py]
 LOGGER[voice_logger_bot.py]
 end
+subgraph "Data Processing"
+ANALYSIS[analysis/]
+DATAENG[data_eng/]
+STOCKBOT[stock_bot/]
+end
 subgraph "Configuration"
 REQ[requirements.txt]
-SETUP[SETUP.md]
-NOTES[MyNotes.md]
 end
 subgraph "Data Storage"
 AUDIO[data/audio/]
 LOGS[data/voice_log.jsonl]
+DB[data.db]
 end
 BOT --> LOGGER
 BOT --> AUDIO
 LOGGER --> LOGS
 LOGGER --> AUDIO
+LOGGER --> ANALYSIS
+ANALYSIS --> DATAENG
+DATAENG --> DB
 ```
 
 **Diagram sources**
 - [bot.py:1-50](file://bot.py#L1-L50)
 - [voice_logger_bot.py:1-50](file://voice_logger_bot.py#L1-L50)
+- [analysis/runner.py:1-50](file://analysis/runner.py#L1-L50)
+- [data_eng/db.py:1-50](file://data_eng/db.py#L1-L50)
 
 **Section sources**
 - [bot.py:1-100](file://bot.py#L1-L100)
@@ -80,14 +97,19 @@ The bot uses environment variables for secure configuration management. Here are
 - **BACKUP_ENABLED**: Enable automatic backup (true/false)
 - **RETENTION_DAYS**: Number of days to keep audio files
 
-### Advanced Settings
-- **PROCESSING_THREADS**: Number of concurrent processing threads
+### Data Processing Configuration
+- **DATABASE_URL**: Database connection string for data storage
+- **ANALYSIS_ENABLED**: Enable advanced data analysis features
 - **CACHE_SIZE**: Size of audio processing cache
+- **PROCESSING_THREADS**: Number of concurrent processing threads
+
+### Advanced Settings
 - **TIMEOUT_SECONDS**: Request timeout for Telegram API calls
+- **API_TIMEOUT**: Timeout for external API calls
+- **MEMORY_LIMIT**: Memory usage limit for processing tasks
 
 **Section sources**
-- [SETUP.md:1-100](file://SETUP.md#L1-L100)
-- [MyNotes.md:1-50](file://MyNotes.md#L1-L50)
+- [stock_bot/config.py:1-100](file://stock_bot/config.py#L1-L100)
 
 ## Bot Settings and Parameters
 
@@ -112,9 +134,16 @@ The bot supports several basic settings that control its core functionality:
 - **buffer_size**: Memory buffer size for audio processing
 - **timeout_settings**: Network timeout configurations
 
+### Data Analysis Settings
+- **analysis_enabled**: Enable or disable data analysis features
+- **processing_pipeline**: Configure data processing pipeline stages
+- **output_formats**: Supported output formats for analysis results
+- **cache_strategy**: Caching strategy for repeated queries
+
 **Section sources**
 - [bot.py:50-150](file://bot.py#L50-L150)
 - [voice_logger_bot.py:50-150](file://voice_logger_bot.py#L50-L150)
+- [stock_bot/config.py:50-150](file://stock_bot/config.py#L50-L150)
 
 ## Audio Processing Configuration
 
@@ -138,7 +167,8 @@ VALIDATE --> |Yes| PROCESS["Process Audio"]
 PROCESS --> CONVERT["Convert Format"]
 CONVERT --> COMPRESS["Apply Compression"]
 COMPRESS --> SAVE["Save to Storage"]
-SAVE --> LOG["Update Log File"]
+SAVE --> ANALYZE["Run Data Analysis"]
+ANALYZE --> LOG["Update Log File"]
 LOG --> RESPONSE["Send Confirmation"]
 ERROR --> END["End Process"]
 RESPONSE --> END
@@ -146,6 +176,7 @@ RESPONSE --> END
 
 **Diagram sources**
 - [voice_logger_bot.py:100-200](file://voice_logger_bot.py#L100-L200)
+- [analysis/runner.py:1-100](file://analysis/runner.py#L1-L100)
 
 ### Audio Quality Settings
 - **bitrate**: Audio bitrate in kbps (128-320 recommended)
@@ -177,7 +208,8 @@ The bot uses JSON Lines (JSONL) format for structured logging:
   "duration": 45.2,
   "format": "mp3",
   "status": "success",
-  "processing_time": 2.3
+  "processing_time": 2.3,
+  "analysis_results": {}
 }
 ```
 
@@ -199,13 +231,20 @@ Audio files are organized by date and timestamp:
 - **MongoDB**: Alternative NoSQL option
 - **CSV Export**: Simple text-based export format
 
+### Enhanced Data Storage
+With the updated dependencies, the bot now supports:
+- **Structured Data Analysis**: Advanced analytics for processed audio data
+- **Performance Metrics**: Tracking processing efficiency and resource usage
+- **Audit Trails**: Comprehensive logging of all data transformations
+
 **Section sources**
 - [voice_logger_bot.py:200-400](file://voice_logger_bot.py#L200-L400)
+- [data_eng/db.py:1-100](file://data_eng/db.py#L1-L100)
 
 ## Dependency Management
 
 ### Core Dependencies
-The bot relies on several key Python libraries:
+The bot relies on several key Python libraries, with recent updates enhancing data processing capabilities:
 
 | Library | Purpose | Version | Notes |
 |---------|---------|---------|-------|
@@ -214,6 +253,10 @@ The bot relies on several key Python libraries:
 | ffmpeg-python | FFmpeg wrapper | Latest stable | Advanced audio processing |
 | python-dotenv | Environment variables | Latest stable | Config management |
 | jsonlines | JSONL file handling | Latest stable | Structured logging |
+| pandas | Data analysis | Latest stable | Enhanced data processing |
+| numpy | Numerical computing | Latest stable | Mathematical operations |
+| duckdb | In-memory database | Latest stable | Fast analytical queries |
+| sqlalchemy | Database ORM | Latest stable | Database abstraction layer |
 
 ### Installation and Setup
 ```bash
@@ -227,6 +270,8 @@ pip install -r requirements.txt
 
 # Verify installation
 python -c "import telegram; print('Telegram bot module loaded')"
+python -c "import pandas; print('Pandas data processing ready')"
+python -c "import duckdb; print('DuckDB analytical engine ready')"
 ```
 
 ### Adding New Dependencies
@@ -236,15 +281,23 @@ To add new libraries to the project:
 2. **Add to requirements.txt**: `package-name==version`
 3. **Update imports**: Add import statements in relevant modules
 4. **Test thoroughly**: Ensure compatibility with existing code
+5. **Document usage**: Add documentation for new functionality
 
 ### Version Management
 - **Lock Versions**: Pin specific versions for stability
 - **Regular Updates**: Periodically update dependencies for security
 - **Compatibility Testing**: Test updates in development first
+- **Dependency Auditing**: Regular security scans for vulnerabilities
+
+### Enhanced Data Processing Dependencies
+The updated requirements.txt now includes:
+- **Data Analysis Libraries**: Pandas, NumPy for statistical analysis
+- **Database Engines**: DuckDB for fast analytical queries
+- **ORM Framework**: SQLAlchemy for database operations
+- **Scientific Computing**: Additional libraries for advanced processing
 
 **Section sources**
-- [requirements.txt:1-50](file://requirements.txt#L1-L50)
-- [SETUP.md:50-150](file://SETUP.md#L50-L150)
+- [requirements.txt:1-100](file://requirements.txt#L1-L100)
 
 ## Security Considerations
 
@@ -272,15 +325,21 @@ To add new libraries to the project:
 - **Handle network timeouts gracefully**
 - **Validate all external API responses**
 
+### Database Security
+- **Use parameterized queries to prevent SQL injection**
+- **Implement proper connection pooling**
+- **Encrypt sensitive data in databases**
+- **Regular backup and disaster recovery planning**
+
 ### Best Practices
 - **Regular security audits**
 - **Keep dependencies updated**
 - **Use virtual environments**
 - **Implement proper logging without sensitive data**
+- **Monitor for security vulnerabilities in dependencies**
 
 **Section sources**
-- [SETUP.md:100-200](file://SETUP.md#L100-L200)
-- [MyNotes.md:50-100](file://MyNotes.md#L50-L100)
+- [stock_bot/config.py:100-200](file://stock_bot/config.py#L100-L200)
 
 ## Customization Scenarios
 
@@ -300,21 +359,21 @@ For custom audio processing:
 3. **Modify compression**: Set `AUDIO_COMPRESSION=50` for balanced quality/size
 4. **Update processing pipeline**: Customize filters and effects
 
-### Scenario 3: Integrating Additional Services
-To integrate with external services:
+### Scenario 3: Integrating Data Analysis Features
+To leverage the enhanced data processing capabilities:
 
-1. **Add service credentials**: Store in environment variables
-2. **Create service client**: Implement API client class
-3. **Hook into processing pipeline**: Add service calls at appropriate points
-4. **Handle errors gracefully**: Implement fallback mechanisms
+1. **Enable analysis**: Set `ANALYSIS_ENABLED=true`
+2. **Configure database**: Set up `DATABASE_URL` for persistent storage
+3. **Customize analysis pipeline**: Modify analysis rules and metrics
+4. **Set up reporting**: Configure output formats for analysis results
 
-### Scenario 4: Custom Logging Format
-For specialized logging needs:
+### Scenario 4: Customizing Database Schema
+For specialized data storage needs:
 
-1. **Define custom formatter**: Create custom logging class
-2. **Add additional fields**: Include application-specific metadata
-3. **Configure output destinations**: Send to multiple log sinks
-4. **Implement log rotation**: Manage log file sizes and retention
+1. **Define schema**: Create custom database models
+2. **Implement migrations**: Handle schema changes gracefully
+3. **Optimize queries**: Use appropriate indexing strategies
+4. **Configure connections**: Set up connection pooling and timeouts
 
 ### Scenario 5: Multi-Chat Deployment
 For managing multiple chats:
@@ -324,9 +383,18 @@ For managing multiple chats:
 3. **Manage separate storage**: Organize data by chat ID
 4. **Handle permissions**: Different access levels per chat
 
+### Scenario 6: Advanced Analytics Integration
+To integrate with external analytics services:
+
+1. **Add service credentials**: Store in environment variables
+2. **Create service client**: Implement API client class
+3. **Hook into processing pipeline**: Add service calls at appropriate points
+4. **Handle errors gracefully**: Implement fallback mechanisms
+
 **Section sources**
 - [bot.py:100-250](file://bot.py#L100-L250)
 - [voice_logger_bot.py:250-500](file://voice_logger_bot.py#L250-L500)
+- [analysis/runner.py:1-100](file://analysis/runner.py#L1-L100)
 
 ## Troubleshooting Guide
 
@@ -350,6 +418,12 @@ For managing multiple chats:
 - **Path validation**: Validate file paths and directory existence
 - **Backup status**: Check backup system functionality
 
+#### Data Processing Issues
+- **Database connectivity**: Verify database connection strings
+- **Memory limits**: Check system memory availability
+- **Library compatibility**: Ensure all dependencies are properly installed
+- **Query performance**: Monitor slow queries and optimize as needed
+
 #### Performance Issues
 - **Resource monitoring**: Monitor CPU and memory usage
 - **Database optimization**: Optimize queries and indexing
@@ -361,26 +435,28 @@ For managing multiple chats:
 - **Use logging framework**: Implement structured logging
 - **Monitor system resources**: Track CPU, memory, and disk usage
 - **Profile performance**: Identify bottlenecks in processing pipeline
+- **Database query profiling**: Analyze slow queries and execution plans
 
 ### Recovery Procedures
 - **Backup restoration**: Restore from latest backup if data corruption occurs
 - **Service restart**: Gracefully restart bot services
 - **Configuration rollback**: Revert to known good configuration
 - **Data migration**: Handle schema changes and data migrations
+- **Dependency recovery**: Reinstall dependencies if corrupted
 
 **Section sources**
-- [SETUP.md:150-250](file://SETUP.md#L150-L250)
-- [MyNotes.md:100-200](file://MyNotes.md#L100-L200)
+- [data_eng/db.py:50-150](file://data_eng/db.py#L50-L150)
 
 ## Conclusion
 
-The Telegram Voice Logger Bot provides a robust and configurable platform for capturing and processing voice messages from Telegram conversations. By understanding the configuration options and customization capabilities outlined in this document, users can tailor the bot to meet their specific requirements while maintaining security and performance standards.
+The Telegram Voice Logger Bot provides a robust and configurable platform for capturing and processing voice messages from Telegram conversations. With the recent updates to enhance data processing and analysis capabilities, the bot now offers significantly expanded functionality for advanced data analysis and reporting. By understanding the configuration options and customization capabilities outlined in this document, users can tailor the bot to meet their specific requirements while maintaining security and performance standards.
 
 Key takeaways include:
 - Proper environment variable management for secure configuration
 - Flexible audio processing pipeline with multiple format support
-- Comprehensive logging and storage options
+- Comprehensive logging and storage options with enhanced data analysis
 - Scalable architecture supporting various deployment scenarios
 - Strong security practices for protecting sensitive data
+- Enhanced data processing capabilities with modern analytical tools
 
-With the guidance provided here, users can effectively deploy, configure, and maintain their Telegram Voice Logger Bot in production environments while ensuring optimal performance and security.
+With the guidance provided here, users can effectively deploy, configure, and maintain their Telegram Voice Logger Bot in production environments while ensuring optimal performance, security, and advanced data analysis capabilities.
