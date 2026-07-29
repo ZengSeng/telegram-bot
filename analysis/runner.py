@@ -13,25 +13,6 @@ LLAMA_MODEL = "MyQwythos"
 # Where reports are saved
 REPORTS_DIR = Path(__file__).parent.parent / "data" / "analysis_reports"
 
-# Track last report path per ticker for /report command
-_last_reports: dict[str, Path] = {}
-
-# Same-day cache: {ticker: {"date": str, "decision": str, "report": Path}}
-_cache: dict[str, dict] = {}
-
-
-def get_last_report(ticker: str) -> Path | None:
-    """Get the path to the most recent report for a ticker."""
-    return _last_reports.get(ticker.upper())
-
-
-def get_cached_analysis(ticker: str) -> str | None:
-    """Return cached decision if already analyzed today, else None."""
-    entry = _cache.get(ticker.upper())
-    if entry and entry["date"] == date.today().strftime("%Y-%m-%d"):
-        return entry["decision"]
-    return None
-
 
 def _patch_dataflows():
     """Monkey-patch TradingAgents VENDOR_METHODS to use DuckDB vendor."""
@@ -117,15 +98,7 @@ def run_analysis(ticker: str, analysis_date: str = None) -> str:
 
     # Save full report tree (markdown files)
     report_path = ta.save_reports(final_state, ticker)
-    _last_reports[ticker.upper()] = report_path
     log.info("Report saved: %s", report_path)
-
-    # Cache for same-day reuse
-    _cache[ticker.upper()] = {
-        "date": analysis_date,
-        "decision": decision,
-        "report": report_path,
-    }
 
     log.info("Analysis complete for %s", ticker)
     return decision

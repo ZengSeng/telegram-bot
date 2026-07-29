@@ -43,7 +43,7 @@ def main() -> None:
     app.add_handler(CommandHandler("charts", handlers.charts_command))
     app.add_handler(CommandHandler("gains", handlers.gains_command))
     app.add_handler(CommandHandler("analyze", handlers.analyze_command))
-    app.add_handler(CommandHandler("report", handlers.report_command))
+    app.add_handler(CommandHandler("summary", handlers.summary_command))
     app.add_handler(CommandHandler("news", handlers.news_command))
     app.add_handler(MessageHandler(filters.PHOTO, handlers.handle_photo))
     app.add_handler(MessageHandler(filters.VOICE, handlers.handle_voice))

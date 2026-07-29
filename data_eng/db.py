@@ -97,6 +97,20 @@ CREATE TABLE IF NOT EXISTS news_summaries (
     PRIMARY KEY (ticker, date)
 );
 
+CREATE TABLE IF NOT EXISTS trading_agent_decisions (
+    ticker          VARCHAR NOT NULL,
+    date            DATE NOT NULL,
+    action          VARCHAR,        -- Buy / Sell / Hold
+    rating          VARCHAR,        -- Overweight / Underweight / Neutral
+    price_target    DOUBLE,
+    entry_price     DOUBLE,
+    stop_loss       DOUBLE,
+    time_horizon    VARCHAR,
+    summary         VARCHAR,        -- executive summary (~500 chars)
+    report_path     VARCHAR,        -- relative path to full report folder
+    PRIMARY KEY (ticker, date)
+);
+
 CREATE TABLE IF NOT EXISTS ticker_enriched (
     ticker              VARCHAR NOT NULL,
     date_fetched        DATE NOT NULL,

@@ -75,8 +75,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/unwatch <TICKER> - remove ticker\n"
         "/portfolio - portfolio summary\n"
         "/gains - realized/unrealized P&L\n"
-        "/analyze <TICKER> - multi-agent AI analysis\n"
-        "/report <TICKER> - full analysis report\n"
+        "/analyze <TICKER> - run trading agent analysis\n"
+        "/summary [TICKER] - trading agent decisions\n"
         "/news - AI news summaries (from pipeline)"
     )
 
@@ -198,105 +198,95 @@ async def run_pipeline_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     log.info("Pipeline job finished.")
 
 
+# ---------------------------------------------------------------------------
+# Trading agent commands
+# ---------------------------------------------------------------------------
+
+
 async def analyze_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Run TradingAgents multi-agent analysis on a ticker (cached per day)."""
+    """Run TradingAgents analysis for a ticker and store decision in DuckDB."""
     if not context.args:
-        await update.message.reply_text(
-            "Usage: /analyze <TICKER> [--force]\n"
-            "Example: /analyze AAPL\n"
-            "Use --force to re-run if already analyzed today."
-        )
-        return
-
-    force = "--force" in context.args
-    ticker = next((a.upper() for a in context.args if not a.startswith("--")), None)
-    if not ticker:
-        await update.message.reply_text("Usage: /analyze <TICKER> [--force]")
-        return
-
-    # Check same-day cache
-    from analysis.runner import get_cached_analysis
-
-    if not force:
-        cached = get_cached_analysis(ticker)
-        if cached:
-            if len(cached) > 4000:
-                cached = cached[:4000] + "\n\n... (truncated)"
-            await update.message.reply_text(
-                f"Already analyzed {ticker} today (cached):\n\n{cached}\n\n"
-                f"Use /report {ticker} for the full breakdown.\n"
-                f"Use /analyze {ticker} --force to re-run."
-            )
-            return
-
-    await update.message.reply_text(
-        f"Starting multi-agent analysis for {ticker}...\n"
-        "This may take 1-3 minutes. I'll send the result when done."
-    )
-
-    try:
-        # Run in executor to avoid blocking the event loop
-        import asyncio
-        from analysis.runner import run_analysis
-
-        loop = asyncio.get_event_loop()
-        decision = await loop.run_in_executor(None, run_analysis, ticker)
-
-        # Truncate if too long for Telegram (4096 char limit)
-        if len(decision) > 4000:
-            decision = decision[:4000] + "\n\n... (truncated)"
-
-        await update.message.reply_text(
-            f"Analysis for {ticker}:\n\n{decision}\n\n"
-            f"Use /report {ticker} for the full breakdown."
-        )
-    except Exception as e:
-        log.error("Analysis failed for %s: %s", ticker, e)
-        await update.message.reply_text(
-            f"Analysis failed for {ticker}: {e}\n\n"
-            f"Make sure you've ingested data first:\n"
-            f"python -m data_eng {ticker}"
-        )
-
-
-async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send the detailed report from the last analysis run."""
-    if not context.args:
-        await update.message.reply_text("Usage: /report <TICKER>\nExample: /report AAPL")
+        await update.message.reply_text("Usage: /analyze <TICKER>")
         return
 
     ticker = context.args[0].upper()
+    await update.message.reply_text(f"Running analysis for {ticker}... (1-3 min)")
 
-    from analysis.runner import get_last_report
+    try:
+        import asyncio
 
-    report_path = get_last_report(ticker)
-    if not report_path or not report_path.exists():
+        from analysis.runner import run_analysis
+        from data_eng.analysis_ingest import ingest_analysis_decision
+
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, run_analysis, ticker)
+        await loop.run_in_executor(None, ingest_analysis_decision, ticker)
+
+        await update.message.reply_text(f"Done. Use /summary {ticker} to view the decision.")
+    except Exception as e:
+        log.error("Analysis failed for %s: %s", ticker, e)
+        await update.message.reply_text(f"Analysis failed for {ticker}: {e}")
+
+
+async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show latest TradingAgents decisions from DuckDB."""
+    from data_eng.db import get_connection
+
+    conn = get_connection()
+
+    if context.args:
+        ticker = context.args[0].upper()
+        rows = conn.execute(
+            """SELECT ticker, date, action, rating, price_target, entry_price,
+                      stop_loss, time_horizon, summary
+               FROM trading_agent_decisions
+               WHERE ticker = ?
+               ORDER BY date DESC LIMIT 5""",
+            [ticker],
+        ).fetchall()
+    else:
+        # Latest decision per ticker
+        rows = conn.execute(
+            """SELECT ticker, date, action, rating, price_target, entry_price,
+                      stop_loss, time_horizon, summary
+               FROM trading_agent_decisions
+               WHERE (ticker, date) IN (
+                   SELECT ticker, MAX(date) FROM trading_agent_decisions GROUP BY ticker
+               )
+               ORDER BY ticker"""
+        ).fetchall()
+
+    conn.close()
+
+    if not rows:
         await update.message.reply_text(
-            f"No report found for {ticker}.\n"
-            f"Run /analyze {ticker} first."
+            "No trading agent decisions found.\n"
+            "Decisions are generated by the daily pipeline."
         )
         return
 
-    # Read the complete report
-    content = report_path.read_text(encoding="utf-8")
+    for row in rows:
+        ticker, dec_date, action, rating, pt, entry, stop, horizon, summary = row
+        lines = [f"\U0001f916 {ticker} ({dec_date})"]
+        if action:
+            lines.append(f"Action: {action}")
+        if rating:
+            lines.append(f"Rating: {rating}")
+        if pt:
+            lines.append(f"Price Target: ${pt:.2f}")
+        if entry:
+            lines.append(f"Entry: ${entry:.2f}")
+        if stop:
+            lines.append(f"Stop Loss: ${stop:.2f}")
+        if horizon:
+            lines.append(f"Horizon: {horizon}")
+        if summary:
+            lines.append(f"\n{summary}")
 
-    # Telegram limit is 4096 chars — send in chunks if needed
-    if len(content) <= 4000:
-        await update.message.reply_text(content)
-    else:
-        # Send section by section
-        sections = content.split("\n## ")
-        header = sections[0]
-        await update.message.reply_text(header[:4000])
-
-        for section in sections[1:]:
-            chunk = f"## {section}"
-            # Split further if a single section is too long
-            while len(chunk) > 4000:
-                await update.message.reply_text(chunk[:4000])
-                chunk = chunk[4000:]
-            if chunk.strip():
-                await update.message.reply_text(chunk)
+        text = "\n".join(lines)
+        if len(text) > 4000:
+            text = text[:4000] + "\n...(truncated)"
+        await update.message.reply_text(text)
 
 
 # ---------------------------------------------------------------------------

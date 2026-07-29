@@ -14,6 +14,7 @@ from .ingest import (
     ingest_global_news,
     ingest_news,
 )
+from .analysis_ingest import has_decision_today, ingest_analysis_decision
 from .summarize import generate_news_summaries
 
 log = logging.getLogger(__name__)
@@ -92,5 +93,22 @@ def run_daily_pipeline(tickers: list[str]) -> None:
         log.info("Pipeline: summarized %d ticker(s)", len(results))
     except Exception as e:
         log.warning("Pipeline: news summarization failed (non-fatal): %s", e)
+
+    # 5. TradingAgents analysis + decision ingestion (uses local LLM)
+    log.info("Pipeline: running TradingAgents analysis...")
+    for ticker in tickers:
+        try:
+            if has_decision_today(ticker):
+                log.info("Pipeline: %s already analyzed today, skipping", ticker)
+                continue
+
+            from analysis.runner import run_analysis
+
+            log.info("Pipeline: analyzing %s...", ticker)
+            run_analysis(ticker)
+            ingest_analysis_decision(ticker)
+            log.info("Pipeline: analysis + ingestion complete for %s", ticker)
+        except Exception as e:
+            log.warning("Pipeline: analysis failed for %s (non-fatal): %s", ticker, e)
 
     log.info("=== Daily pipeline complete ===")
