@@ -11,11 +11,11 @@
 
 ## Update Summary
 **Changes Made**
-- Added comprehensive documentation for the new pipeline.py module (87 lines) implementing automated data processing workflows
-- Enhanced __main__.py integration documentation to reflect pipeline orchestration capabilities
-- Updated architecture diagrams to include the new pipeline component
-- Expanded data processing workflow documentation covering ingestion, transformation, and output capabilities
-- Added new section detailing the pipeline's role in stock market data processing automation
+- Enhanced database schema with 21 additional lines supporting trading configurations, news metadata, and user preferences
+- Improved data flow between news ingestion, analysis, and summarization components with 27 additional lines
+- Updated database layer documentation to reflect new schema capabilities
+- Enhanced pipeline orchestration to support the new data flow patterns
+- Expanded ingestion engine documentation to cover news-specific processing workflows
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -34,14 +34,14 @@
 14. [Conclusion](#conclusion)
 
 ## Introduction
-This document describes the Data Engineering Module responsible for ingesting data and persisting it to a database. The module has been significantly enhanced as a complete data engineering subsystem with a robust data ingestion pipeline, advanced database management utilities, comprehensive command-line interface capabilities, and a new automated pipeline orchestrator specifically designed for financial market data processing. It focuses on the enhanced data pipeline entry points, sophisticated ingestion logic, advanced database interactions, and the new pipeline orchestration layer within the data_eng package. The goal is to provide both a high-level understanding and detailed technical insights into how data flows through the enhanced module, how components interact, and where to look when diagnosing issues or extending functionality for production deployments.
+This document describes the Data Engineering Module responsible for ingesting data and persisting it to a database. The module has been significantly enhanced as a complete data engineering subsystem with a robust data ingestion pipeline, advanced database management utilities, comprehensive command-line interface capabilities, and a new automated pipeline orchestrator specifically designed for financial market data processing. **Updated**: The module now includes an enhanced database schema supporting trading configurations, news metadata, and user preferences, along with improved data flow between news ingestion, analysis, and summarization components. It focuses on the enhanced data pipeline entry points, sophisticated ingestion logic, advanced database interactions, and the new pipeline orchestration layer within the data_eng package. The goal is to provide both a high-level understanding and detailed technical insights into how data flows through the enhanced module, how components interact, and where to look when diagnosing issues or extending functionality for production deployments.
 
 ## Project Structure
 The data engineering module is implemented as a Python package under data_eng with the following key files:
 - __init__.py: Package initialization and optional exports
 - __main__.py: Entry point for running the module as a script with enhanced CLI capabilities and pipeline orchestration
-- db.py: Database connection management and query helpers with expanded functionality
-- ingest.py: Ingestion logic for reading sources and writing to the database with significant enhancements
+- db.py: Database connection management and query helpers with expanded functionality including new schema support
+- ingest.py: Ingestion logic for reading sources and writing to the database with significant enhancements including news-specific workflows
 - pipeline.py: New automated pipeline orchestrator providing end-to-end data processing workflows for stock market data
 
 ```mermaid
@@ -79,8 +79,8 @@ E --> C
 
 ## Core Components
 - **Automated Pipeline Orchestrator (pipeline.py)**: New 87-line module that provides end-to-end data processing workflows for stock market data, including ingestion, transformation, and output capabilities with automated scheduling and error handling.
-- **Enhanced Ingestion Engine (ingest.py)**: Orchestrates reading from one or more data sources, transforming records, and writing them to the database with significant improvements including batch processing, error handling, retry mechanisms, and logging hooks. Now supports 430+ lines of enhanced functionality.
-- **Advanced Database Layer (db.py)**: Manages connections, transactions, and provides helper functions for executing queries and handling results with 63 additional lines of expanded functionality. Abstracts vendor-specific details behind a consistent interface.
+- **Enhanced Ingestion Engine (ingest.py)**: Orchestrates reading from one or more data sources, transforming records, and writing them to the database with significant improvements including batch processing, error handling, retry mechanisms, and logging hooks. Now supports 430+ lines of enhanced functionality with specialized news data processing workflows.
+- **Advanced Database Layer (db.py)**: Manages connections, transactions, and provides helper functions for executing queries and handling results with 63 additional lines of expanded functionality. **Updated**: Enhanced with 21 additional lines supporting trading configurations, news metadata, and user preferences schema. Abstracts vendor-specific details behind a consistent interface.
 - **Command-Line Interface (__main__.py)**: Provides comprehensive command-line interface to run ingestion jobs, parse arguments, invoke the ingestion engine, and orchestrate the new pipeline with appropriate configuration for production use.
 - **Package Initialization (__init__.py)**: Exposes public APIs for importing ingestion, database utilities, and pipeline orchestration from other modules.
 
@@ -91,6 +91,7 @@ Key responsibilities:
 - Robust error handling and retry strategies across all layers
 - Logging and observability hooks throughout the processing chain
 - Production-ready deployment features with monitoring and alerting
+- **New**: Specialized support for trading configurations, news metadata, and user preferences data models
 
 **Section sources**
 - [data_eng/pipeline.py](file://data_eng/pipeline.py)
@@ -103,8 +104,8 @@ Key responsibilities:
 The enhanced data pipeline follows a clear separation of concerns with production-ready features and automated orchestration:
 - The entry point parses CLI arguments and invokes either the ingestion engine directly or the new pipeline orchestrator with comprehensive configuration options.
 - The pipeline orchestrator coordinates multiple processing stages including data ingestion, transformation, validation, and output generation.
-- The ingestion engine reads data, transforms it, and delegates writes to the database layer with enhanced error handling.
-- The database layer handles connection lifecycle and executes SQL statements with advanced transaction management.
+- The ingestion engine reads data, transforms it, and delegates writes to the database layer with enhanced error handling and specialized news data processing.
+- The database layer handles connection lifecycle and executes SQL statements with advanced transaction management and enhanced schema support.
 
 ```mermaid
 sequenceDiagram
@@ -117,13 +118,13 @@ Pipeline->>Ingest : "execute ingestion workflow"
 Ingest->>Ingest : "read source(s)"
 Ingest->>Ingest : "transform records"
 Ingest->>DB : "open connection"
-Ingest->>DB : "execute write operations"
+Ingest->>DB : "execute write operations with enhanced schema"
 DB-->>Ingest : "results/status"
 Ingest->>DB : "commit or rollback"
 Ingest-->>Pipeline : "ingestion status"
 Pipeline->>Pipeline : "transformation & validation"
 Pipeline-->>CLI : "summary and logs"
-Note over Pipeline,Ingest : Automated workflow orchestration with error handling
+Note over Pipeline,Ingest : Automated workflow orchestration with error handling and enhanced data flow
 ```
 
 **Diagram sources**
@@ -179,6 +180,7 @@ Responsibilities:
 - Batched writes to the database with optimized performance
 - Error handling and retries with configurable strategies
 - Progress reporting and metrics collection
+- **New**: Specialized news data processing workflows with improved data flow between ingestion, analysis, and summarization components
 
 Processing flow:
 - Initialize source readers with enhanced configuration
@@ -194,7 +196,8 @@ ReadSource --> Validate["Validate Records"]
 Validate --> Valid{"Valid?"}
 Valid --> |No| Skip["Skip/Log Invalid"]
 Valid --> |Yes| Transform["Transform Records"]
-Transform --> Batch["Batch Records"]
+Transform --> NewsFlow["News Data Flow Processing"]
+NewsFlow --> Batch["Batch Records"]
 Batch --> Write["Write to DB"]
 Write --> Success{"Write Success?"}
 Success --> |No| Retry["Retry/Fallback"]
@@ -211,17 +214,21 @@ Skip --> End
 - [data_eng/ingest.py](file://data_eng/ingest.py)
 
 ### Advanced Database Layer (db.py)
+**Updated** - Enhanced with 21 additional lines for new schema support
+
 Responsibilities:
 - Connection management (connect, close, pool if applicable) with enhanced reliability
 - Transaction control (begin, commit, rollback) with improved error handling
 - Query execution helpers (execute, executemany) with better performance
 - Result mapping and error translation with comprehensive diagnostics
+- **New**: Enhanced schema support for trading configurations, news metadata, and user preferences
 
 Common patterns:
 - Context managers for safe resource handling
 - Parameterized queries to prevent injection
 - Vendor-specific adapters behind a unified interface
 - Connection pooling and optimization
+- **New**: Schema migration support for new data models
 
 ```mermaid
 classDiagram
@@ -235,6 +242,9 @@ class DatabaseManager {
 +executemany(sql, params_list)
 +optimize_connection()
 +monitor_performance()
++support_trading_configs()
++handle_news_metadata()
++manage_user_preferences()
 }
 ```
 
@@ -335,6 +345,7 @@ The ingestion pipeline has been significantly enhanced with 430+ new lines of fu
 - **Batch Optimization**: Intelligent batching strategies for optimal performance
 - **Error Recovery**: Sophisticated error handling with automatic retry mechanisms
 - **Progress Tracking**: Real-time progress monitoring and reporting
+- **New**: Improved data flow between news ingestion, analysis, and summarization components
 
 ### Production-Ready Enhancements
 - **Memory Management**: Optimized memory usage for large datasets
@@ -343,7 +354,7 @@ The ingestion pipeline has been significantly enhanced with 430+ new lines of fu
 - **Metrics Collection**: Performance metrics and operational statistics
 
 ### Pipeline Integration
-The enhanced ingestion pipeline now works seamlessly with the new pipeline orchestrator, providing automated execution of complex data processing workflows for stock market data.
+The enhanced ingestion pipeline now works seamlessly with the new pipeline orchestrator, providing automated execution of complex data processing workflows for stock market data with specialized news data processing capabilities.
 
 **Section sources**
 - [data_eng/ingest.py](file://data_eng/ingest.py)
@@ -369,6 +380,12 @@ The database layer has been expanded with 63 additional lines of functionality, 
 - **Result Mapping**: Automatic type conversion and validation
 - **Batch Operations**: Optimized bulk insert/update operations
 - **Query Caching**: Intelligent caching for repeated operations
+
+### **New Schema Support**
+- **Trading Configurations**: Enhanced schema for storing and managing trading parameters and strategies
+- **News Metadata**: Structured storage for news article metadata, sentiment analysis, and categorization
+- **User Preferences**: Personalized user settings and configuration management
+- **Schema Migration**: Automated migration support for evolving data models
 
 **Section sources**
 - [data_eng/db.py](file://data_eng/db.py)
@@ -472,6 +489,7 @@ Main --> DB
 - **Memory Management**: Optimize memory usage for large datasets with streaming capabilities
 - **I/O Optimization**: Implement efficient I/O patterns for high-throughput scenarios
 - **Pipeline Optimization**: Configure pipeline stage parallelism and resource allocation for optimal throughput
+- **New**: Optimized data flow between news ingestion, analysis, and summarization components for improved performance
 
 ## Troubleshooting Guide
 Common issues and resolutions:
@@ -483,6 +501,7 @@ Common issues and resolutions:
 - **Performance Issues**: Analyze query performance and optimize bottlenecks with profiling tools
 - **Configuration Problems**: Validate configuration files and environment variables with syntax checking
 - **Pipeline Failures**: Check individual pipeline stage logs and dependency availability with stage-specific diagnostics
+- **New**: Schema migration issues with enhanced migration tools and validation
 
 Diagnostic steps:
 - Enable verbose logging at ingestion, pipeline, and database layers with structured log analysis
@@ -491,6 +510,7 @@ Diagnostic steps:
 - Monitor transaction durations and lock contention with performance analytics
 - Check system resources and identify bottlenecks with resource monitoring
 - Review pipeline stage execution logs and error traces for failure diagnosis
+- **New**: Monitor news data flow between ingestion, analysis, and summarization components
 
 **Section sources**
 - [data_eng/ingest.py](file://data_eng/ingest.py)
@@ -498,4 +518,4 @@ Diagnostic steps:
 - [data_eng/pipeline.py](file://data_eng/pipeline.py)
 
 ## Conclusion
-The enhanced Data Engineering Module provides a clean separation between pipeline orchestration, ingestion, and persistence, enabling robust, configurable, and maintainable data pipelines for production deployments. With the addition of the new automated pipeline orchestrator (87 lines), significant enhancements to the ingestion pipeline (430+ new lines), expanded database operations (63 additional lines), and comprehensive command-line interface capabilities, it supports scalable and reliable data workflows for stock market data processing. The module now includes production-ready features such as automated workflow execution, advanced error handling, performance optimization, monitoring capabilities, and deployment automation. Future enhancements can include advanced error recovery, richer metrics, additional source connectors, machine learning integration for intelligent data processing, and expanded pipeline orchestration capabilities.
+The enhanced Data Engineering Module provides a clean separation between pipeline orchestration, ingestion, and persistence, enabling robust, configurable, and maintainable data pipelines for production deployments. With the addition of the new automated pipeline orchestrator (87 lines), significant enhancements to the ingestion pipeline (430+ new lines), expanded database operations (63 additional lines), and comprehensive command-line interface capabilities, it supports scalable and reliable data workflows for stock market data processing. **Updated**: The module now includes an enhanced database schema with 21 additional lines supporting trading configurations, news metadata, and user preferences, along with improved data flow between news ingestion, analysis, and summarization components (27 additional lines). The module now includes production-ready features such as automated workflow execution, advanced error handling, performance optimization, monitoring capabilities, and deployment automation. Future enhancements can include advanced error recovery, richer metrics, additional source connectors, machine learning integration for intelligent data processing, and expanded pipeline orchestration capabilities.

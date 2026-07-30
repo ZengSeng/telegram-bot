@@ -1,0 +1,17 @@
+Qwythos-9B-v2-GGUF
+GGUF quantizations of empero-ai/Qwythos-9B-v2 for llama.cpp, Ollama, LM Studio, jan, KoboldCpp, and other GGUF runtimes.
+
+Qwythos-9B-v2 is the new and improved Qwythos — all the deep chain-of-thought reasoning of the base Qwythos, with the looping behavior fixed. The looping/degeneration that showed up under greedy or low-temperature decoding is trained out (6.7% → 0%), the native MTP head is restored, and the identity prompt is cleaned up — while knowledge and reasoning are held at (or above) the base Qwythos level.
+
+The fix uses FTPO (Final-Token Preference Optimization): the exact token that starts a repetition loop is identified and the model is gently trained to prefer coherent alternatives at that one position, leaving the rest of the distribution — and therefore its knowledge and reasoning — untouched.
+
+For full training details, evaluation numbers, and sample generations, see the base model card.
+
+What's new vs. the base Qwythos
+🔁 Looping behavior eliminated — repetition under greedy / low-temp decoding dropped 6.7% → 0%. Greedy decoding is now safe — you no longer need repeat-penalty as a band-aid.
+🧩 MTP head restored — the native multi-token-prediction module is back in the -MTP- files, so speculative-decoding (--spec-type draft-mtp) works.
+🧠 Reasoning preserved — MMLU / GSM8K / GPQA / ARC held at or above the base Qwythos level (see the model card).
+🪪 Cleaner identity — states who it is once, only when asked.
+🔓 Still intentionally uncensored, still 1M-token context (YaRN), still multimodal-capable (Qwen3.5 vision tower).
+
+llama serve -hf empero-ai/Qwythos-9B-v2-GGUF:Q8_0 --alias MyQwythos --port 10000 
