@@ -41,7 +41,7 @@ CHAT_ID_FILE = DATA_DIR / "chat_id.txt"
 # ---------------------------------------------------------------------------
 
 SUMMARY_HOUR = 9
-SUMMARY_MINUTE = 0
+SUMMARY_MINUTE = 30
 PIPELINE_HOUR = 8
 PIPELINE_MINUTE = 0
 LOCAL_TIMEZONE = "Pacific/Auckland"  # New Zealand

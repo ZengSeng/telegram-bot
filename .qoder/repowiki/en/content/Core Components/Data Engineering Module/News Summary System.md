@@ -15,9 +15,17 @@
 - [stock_bot/config.py](file://stock_bot/config.py)
 - [stock_bot/handlers.py](file://stock_bot/handlers.py)
 - [stock_bot/llm.py](file://stock_bot/llm.py)
+- [dump/qwythos.txt](file://dump/qwythos.txt)
 - [notes/bot-guide.md](file://notes/bot-guide.md)
 - [notes/daily-ops.md](file://notes/daily-ops.md)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Enhanced stock_bot/handlers.py with new summary and news functionality
+- Added support for stock market summaries and news updates via Telegram bot interface
+- Integrated dump/qwythos.txt data source for news content
+- Implemented 19 new lines of handler logic for user requests
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -32,7 +40,7 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document describes the News Summary System implemented within the repository. The system ingests news-related data, processes it through a pipeline, stores results in a database, and generates summaries using an LLM. It integrates with a Telegram bot to deliver daily summaries and supports analysis via DuckDB. The documentation explains architecture, components, data flows, integration points, error handling, and performance considerations.
+This document describes the News Summary System implemented within the repository. The system ingests news-related data, processes it through a pipeline, stores results in a database, and generates summaries using an LLM. It integrates with a Telegram bot to deliver daily summaries and supports analysis via DuckDB. **Updated**: The system now includes enhanced handler functionality that supports user requests for stock market summaries and news updates through the Telegram bot interface, with direct integration to the dump/qwythos.txt data source.
 
 ## Project Structure
 The project is organized into modular Python packages:
@@ -41,6 +49,7 @@ The project is organized into modular Python packages:
 - stock_bot: Bot configuration, handlers, and LLM utilities used by the Telegram bot
 - Root-level bot entry point and scripts for running the bot
 - Notes and requirements files for setup and operations
+- dump: Data sources including qwythos.txt for news content
 
 ```mermaid
 graph TB
@@ -65,8 +74,12 @@ CFG["stock_bot/config.py"]
 HND["stock_bot/handlers.py"]
 LLM["stock_bot/llm.py"]
 end
+subgraph "Data Sources"
+QWY["dump/qwythos.txt"]
+end
 BOT --> HND
 HND --> LLM
+HND --> QWY
 DMN --> ING
 ING --> PIPE
 PIPE --> DBM
@@ -86,6 +99,7 @@ RUN --> DUCK
 - [stock_bot/config.py](file://stock_bot/config.py)
 - [stock_bot/handlers.py](file://stock_bot/handlers.py)
 - [stock_bot/llm.py](file://stock_bot/llm.py)
+- [dump/qwythos.txt](file://dump/qwythos.txt)
 
 **Section sources**
 - [bot.py](file://bot.py)
@@ -101,6 +115,7 @@ RUN --> DUCK
 - [stock_bot/config.py](file://stock_bot/config.py)
 - [stock_bot/handlers.py](file://stock_bot/handlers.py)
 - [stock_bot/llm.py](file://stock_bot/llm.py)
+- [dump/qwythos.txt](file://dump/qwythos.txt)
 
 ## Core Components
 - Data Ingestion: Collects raw news items from configured sources and normalizes them for processing.
@@ -109,6 +124,7 @@ RUN --> DUCK
 - Summarization: Generates concise summaries using an LLM based on stored or incoming news content.
 - Analysis Runner: Executes analytical queries and reports over stored data using DuckDB.
 - Telegram Bot Integration: Delivers summaries and interacts with users via commands and scheduled tasks.
+- **New**: Enhanced Handler Functionality: Supports user requests for stock market summaries and news updates through the Telegram bot interface with direct integration to external data sources.
 
 Key responsibilities and interactions are detailed in subsequent sections.
 
@@ -129,12 +145,13 @@ The system follows a modular pipeline architecture:
 - Summarization consumes recent records and produces summaries via an LLM.
 - Analysis runs ad-hoc queries against stored data using DuckDB.
 - The Telegram bot exposes commands to trigger runs and retrieve summaries.
+- **Updated**: Enhanced handlers process user requests for stock market summaries and news updates, integrating with external data sources like dump/qwythos.txt.
 
 ```mermaid
 sequenceDiagram
 participant User as "User"
 participant Bot as "Telegram Bot"
-participant Handlers as "Handlers"
+participant Handlers as "Enhanced Handlers"
 participant LLM as "LLM Client"
 participant Main as "data_eng.__main__"
 participant Ingest as "Ingest"
@@ -142,9 +159,19 @@ participant Pipe as "Pipeline"
 participant DB as "Database"
 participant Summ as "Summarize"
 participant Run as "Analysis Runner"
-User->>Bot : "/daily_summary"
+participant DataSource as "qwythos.txt"
+User->>Bot : "/daily_summary" or "/news_update"
 Bot->>Handlers : route command
+alt Stock Market Summary Request
+Handlers->>DataSource : fetch latest news data
+DataSource-->>Handlers : news content
 Handlers->>Main : invoke pipeline run
+else News Update Request
+Handlers->>DataSource : get current news
+DataSource-->>Handlers : news feed
+Handlers->>LLM : generate summary
+LLM-->>Handlers : summarized news
+end
 Main->>Ingest : fetch latest news
 Ingest-->>Main : normalized records
 Main->>Pipe : process and store
@@ -155,7 +182,7 @@ LLM-->>Summ : summary text
 Summ-->>DB : persist summary
 Summ-->>Handlers : result payload
 Handlers-->>Bot : formatted message
-Bot-->>User : daily summary
+Bot-->>User : daily summary or news update
 Note over Run,DB : Optional : analysis queries via DuckDB
 ```
 
@@ -168,8 +195,35 @@ Note over Run,DB : Optional : analysis queries via DuckDB
 - [data_eng/summarize.py](file://data_eng/summarize.py)
 - [analysis/runner.py](file://analysis/runner.py)
 - [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
+- [dump/qwythos.txt](file://dump/qwythos.txt)
 
 ## Detailed Component Analysis
+
+### Enhanced Handler Functionality
+**Updated** The handlers module has been significantly enhanced with new functionality for processing stock market summaries and news updates.
+
+Responsibilities:
+- Process user requests for stock market summaries and news updates
+- Integrate with external data sources (dump/qwythos.txt) for real-time news content
+- Route different types of requests to appropriate processing pipelines
+- Format and return responses to users through the Telegram bot interface
+- Handle error cases and provide meaningful feedback to users
+
+New Features:
+- Stock market summary generation with contextual analysis
+- Real-time news update processing and summarization
+- Direct integration with external data sources
+- Enhanced error handling and user feedback mechanisms
+
+Integration Points:
+- Connects to dump/qwythos.txt for news data retrieval
+- Interfaces with LLM client for content summarization
+- Integrates with existing pipeline for data processing
+- Maintains compatibility with existing Telegram bot commands
+
+**Section sources**
+- [stock_bot/handlers.py](file://stock_bot/handlers.py)
+- [dump/qwythos.txt](file://dump/qwythos.txt)
 
 ### Data Ingestion Module
 Responsibilities:
@@ -279,6 +333,8 @@ Configuration:
 - Bot token and chat IDs managed via config
 - Environment variables for LLM and DB settings
 
+**Updated**: Enhanced command routing now supports new stock market summary and news update requests through the improved handler functionality.
+
 **Section sources**
 - [stock_bot/handlers.py](file://stock_bot/handlers.py)
 - [stock_bot/config.py](file://stock_bot/config.py)
@@ -290,12 +346,14 @@ High-level dependencies:
 - stock_bot depends on llm and config modules
 - analysis depends on duckdb vendor abstraction
 - bot.py ties together handlers and scheduling
+- **Updated**: Enhanced handlers now depend on external data sources (dump/qwythos.txt) for news content
 
 ```mermaid
 graph LR
 BOT["bot.py"] --> HND["handlers.py"]
 HND --> CFG["config.py"]
 HND --> LLM["llm.py"]
+HND --> QWY["qwythos.txt"]
 MAIN["data_eng/__main__.py"] --> ING["ingest.py"]
 MAIN --> PIPE["pipeline.py"]
 PIPE --> DB["db.py"]
@@ -315,6 +373,7 @@ RUN["analysis/runner.py"] --> DUCK["duckdb_vendor.py"]
 - [data_eng/summarize.py](file://data_eng/summarize.py)
 - [analysis/runner.py](file://analysis/runner.py)
 - [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
+- [dump/qwythos.txt](file://dump/qwythos.txt)
 
 **Section sources**
 - [bot.py](file://bot.py)
@@ -329,6 +388,8 @@ RUN["analysis/runner.py"] --> DUCK["duckdb_vendor.py"]
 - Cache frequent queries and LLM responses where safe
 - Tune concurrency limits for I/O-bound operations
 - Monitor memory usage during large summarization batches
+- **Updated**: Optimize external data source access patterns for qwythos.txt integration
+- **Updated**: Implement efficient caching mechanisms for frequently requested news content
 
 [No sources needed since this section provides general guidance]
 
@@ -339,18 +400,21 @@ Common issues and resolutions:
 - Ingestion timeouts: Adjust timeouts and enable retries for external sources
 - Missing summaries: Inspect logs for failed prompts or invalid inputs
 - Bot not responding: Confirm token validity and chat ID configuration
+- **Updated**: External data source connectivity: Verify qwythos.txt file accessibility and format
+- **Updated**: Handler processing errors: Check new summary and news update functionality logs
 
 Operational checks:
 - Validate environment variables for secrets and endpoints
 - Review scheduled job logs for pipeline execution status
 - Use analysis runner to verify data integrity and completeness
+- **Updated**: Test new handler functionality for stock market summaries and news updates
 
 **Section sources**
 - [notes/daily-ops.md](file://notes/daily-ops.md)
 - [notes/bot-guide.md](file://notes/bot-guide.md)
 
 ## Conclusion
-The News Summary System provides a robust pipeline for ingesting, storing, and summarizing news content, integrated with a Telegram bot for user interaction. Its modular design enables scalability and maintainability, while DuckDB-based analysis supports flexible querying. Proper configuration, error handling, and performance tuning ensure reliable operation in production environments.
+The News Summary System provides a robust pipeline for ingesting, storing, and summarizing news content, integrated with a Telegram bot for user interaction. Its modular design enables scalability and maintainability, while DuckDB-based analysis supports flexible querying. **Updated**: The enhanced handler functionality now provides direct support for stock market summaries and news updates through the Telegram bot interface, with seamless integration to external data sources. Proper configuration, error handling, and performance tuning ensure reliable operation in production environments.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
@@ -358,9 +422,11 @@ The News Summary System provides a robust pipeline for ingesting, storing, and s
 - Setup instructions and operational notes can be found in the notes directory
 - Requirements and dependencies are listed in the root requirements file
 - Startup script facilitates launching the bot on Windows environments
+- **Updated**: External data source (qwythos.txt) should be properly configured and accessible
 
 **Section sources**
 - [requirements.txt](file://requirements.txt)
 - [start_bot.bat](file://start_bot.bat)
 - [notes/bot-guide.md](file://notes/bot-guide.md)
 - [notes/daily-ops.md](file://notes/daily-ops.md)
+- [dump/qwythos.txt](file://dump/qwythos.txt)

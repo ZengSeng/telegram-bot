@@ -4,6 +4,7 @@ duckdb
 ta
 beautifulsoup4
 matplotlib
+playwright
 
 # TradingAgents is installed via git submodule:
 #   git submodule update --init

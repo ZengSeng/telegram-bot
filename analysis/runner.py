@@ -31,6 +31,7 @@ def _patch_dataflows():
         "get_news": duckdb_vendor.get_news,
         "get_global_news": duckdb_vendor.get_global_news,
         "get_insider_transactions": duckdb_vendor.get_insider_transactions,
+        "get_market_sentiment": duckdb_vendor.get_market_sentiment,
     }
 
     for method, func in duckdb_methods.items():
@@ -93,7 +94,11 @@ def run_analysis(ticker: str, analysis_date: str = None) -> str:
 
     log.info("Starting TradingAgents analysis: %s on %s", ticker, analysis_date)
 
-    ta = TradingAgentsGraph(debug=False, config=config)
+    ta = TradingAgentsGraph(
+        selected_analysts=("market", "news", "fundamentals"),
+        debug=False,
+        config=config,
+    )
     final_state, decision = ta.propagate(ticker, analysis_date)
 
     # Save full report tree (markdown files)

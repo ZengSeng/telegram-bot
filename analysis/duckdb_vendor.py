@@ -245,3 +245,49 @@ def get_global_news(curr_date: str, look_back_days: int = 7, limit: int = 15) ->
 def get_insider_transactions(ticker: str) -> str:
     """Return insider transactions (not stored locally, return graceful message)."""
     return f"No insider transaction data stored locally for '{ticker}'."
+
+
+def get_market_sentiment(ticker: str) -> str:
+    """Return Google Finance AI overview: summary, sentiment %, bull/bear points."""
+    conn = get_connection()
+    row = conn.execute(
+        """SELECT summary, pct_bullish, pct_neutral, pct_bearish,
+                  bull_points, bear_points, date_fetched
+           FROM gfinance_overview
+           WHERE ticker = ?
+           ORDER BY date_fetched DESC LIMIT 1""",
+        [ticker],
+    ).fetchone()
+    conn.close()
+
+    if not row:
+        return f"NO_DATA_AVAILABLE: No Google Finance overview for '{ticker}'."
+
+    summary, pct_bull, pct_neut, pct_bear, bull_json, bear_json, fetched = row
+
+    lines = [f"# Market Sentiment Overview for {ticker}"]
+    lines.append(f"# Source: Google Finance (TipRanks), fetched {fetched}\n")
+
+    if summary:
+        lines.append(f"## AI Summary\n{summary}\n")
+
+    if pct_bull is not None:
+        lines.append(f"## News Sentiment\n{pct_bull}% bullish | {pct_neut}% neutral | {pct_bear}% bearish\n")
+
+    if bull_json:
+        points = json.loads(bull_json)
+        if points:
+            lines.append("## Bullish Case")
+            for p in points:
+                lines.append(f"- **{p['title']}**: {p['description']}")
+            lines.append("")
+
+    if bear_json:
+        points = json.loads(bear_json)
+        if points:
+            lines.append("## Bearish Case")
+            for p in points:
+                lines.append(f"- **{p['title']}**: {p['description']}")
+            lines.append("")
+
+    return "\n".join(lines)

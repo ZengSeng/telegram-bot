@@ -111,6 +111,18 @@ CREATE TABLE IF NOT EXISTS trading_agent_decisions (
     PRIMARY KEY (ticker, date)
 );
 
+CREATE TABLE IF NOT EXISTS gfinance_overview (
+    ticker          VARCHAR NOT NULL,
+    date_fetched    DATE NOT NULL,
+    summary         VARCHAR,
+    pct_bullish     DOUBLE,
+    pct_neutral     DOUBLE,
+    pct_bearish     DOUBLE,
+    bull_points     VARCHAR,    -- JSON array of {title, description}
+    bear_points     VARCHAR,    -- JSON array of {title, description}
+    PRIMARY KEY (ticker, date_fetched)
+);
+
 CREATE TABLE IF NOT EXISTS ticker_enriched (
     ticker              VARCHAR NOT NULL,
     date_fetched        DATE NOT NULL,
