@@ -14,11 +14,11 @@
 
 ## Update Summary
 **Changes Made**
-- Added comprehensive data engineering pipeline configuration section with new settings for data sources, processing parameters, and scheduling configurations
-- Updated dependency management to reflect enhanced data processing capabilities with DuckDB, SQLAlchemy, and analytical libraries
-- Enhanced customization scenarios to include data engineering pipeline integration
-- Expanded database configuration options with new connection strings and optimization parameters
-- Added new environment variables for data source management and pipeline scheduling
+- Enhanced stock bot configuration with additional performance optimization settings in config.py
+- Updated environment variables section to include new performance tuning parameters
+- Expanded data engineering pipeline configuration with advanced optimization options
+- Added comprehensive performance monitoring and resource management settings
+- Enhanced dependency management to support performance-critical libraries
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -36,7 +36,7 @@
 
 ## Introduction
 
-The Telegram Voice Logger Bot is designed to capture, process, and store voice messages from Telegram conversations. This document provides comprehensive guidance on configuring and customizing the bot's behavior, including environment variables, audio processing parameters, logging formats, storage locations, and advanced data engineering pipeline functionality. The bot supports flexible configuration options to adapt to different deployment scenarios and user requirements. With recent enhancements, the bot now includes expanded data processing and analysis capabilities through updated dependencies and a sophisticated data engineering pipeline.
+The Telegram Voice Logger Bot is designed to capture, process, and store voice messages from Telegram conversations. This document provides comprehensive guidance on configuring and customizing the bot's behavior, including environment variables, audio processing parameters, logging formats, storage locations, and advanced data engineering pipeline functionality. The bot supports flexible configuration options to adapt to different deployment scenarios and user requirements. With recent enhancements, the bot now includes expanded data processing and analysis capabilities through updated dependencies and a sophisticated data engineering pipeline, along with significant performance optimizations in the stock bot configuration.
 
 ## Project Structure
 
@@ -121,11 +121,24 @@ The bot uses environment variables for secure configuration management. Here are
 - **RETRY_ATTEMPTS**: Number of retry attempts for failed operations
 - **TIMEOUT_SECONDS**: Timeout for pipeline operations in seconds
 
+### Performance Optimization Settings
+- **MEMORY_LIMIT**: Memory usage limit for processing tasks (in MB)
+- **WORKER_PROCESSES**: Number of worker processes for parallel processing
+- **CONCURRENT_DOWNLOADS**: Maximum simultaneous downloads
+- **BUFFER_SIZE**: Memory buffer size for audio processing (in MB)
+- **CACHE_STRATEGY**: Caching strategy (memory, disk, hybrid)
+- **GC_INTERVAL**: Garbage collection interval in seconds
+- **THREAD_POOL_SIZE**: Size of thread pool for I/O operations
+- **ASYNC_IO_ENABLED**: Enable asynchronous I/O operations (true/false)
+
 ### Advanced Settings
 - **TIMEOUT_SECONDS**: Request timeout for Telegram API calls
 - **API_TIMEOUT**: Timeout for external API calls
-- **MEMORY_LIMIT**: Memory usage limit for processing tasks
-- **WORKER_PROCESSES**: Number of worker processes for parallel processing
+- **HEALTH_CHECK_INTERVAL**: Health check interval in seconds
+- **METRICS_ENABLED**: Enable performance metrics collection (true/false)
+- **PROFILING_ENABLED**: Enable code profiling (true/false)
+
+**Updated** Added comprehensive performance optimization settings including memory management, caching strategies, and resource allocation controls to enhance overall system performance and stability.
 
 **Section sources**
 - [stock_bot/config.py:1-100](file://stock_bot/config.py#L1-L100)
@@ -152,6 +165,8 @@ The bot supports several basic settings that control its core functionality:
 - **concurrent_downloads**: Maximum simultaneous downloads
 - **buffer_size**: Memory buffer size for audio processing
 - **timeout_settings**: Network timeout configurations
+- **connection_pool_size**: Size of database connection pool
+- **request_rate_limit**: Rate limiting for API requests per second
 
 ### Data Analysis Settings
 - **analysis_enabled**: Enable or disable data analysis features
@@ -165,6 +180,15 @@ The bot supports several basic settings that control its core functionality:
 - **processing_stages**: Ordered list of processing stages
 - **scheduling_config**: Schedule configuration for pipeline execution
 - **monitoring_enabled**: Enable performance monitoring and metrics collection
+
+### Stock Bot Performance Optimizations
+- **optimization_level**: Performance optimization level (basic, advanced, maximum)
+- **memory_management**: Memory management strategy (aggressive, balanced, conservative)
+- **thread_safety**: Thread safety level for concurrent operations
+- **resource_monitoring**: Enable resource usage monitoring and alerts
+- **performance_logging**: Detailed performance metrics collection
+
+**Updated** Enhanced performance tuning section with new stock bot optimization settings including memory management strategies, thread safety levels, and resource monitoring capabilities.
 
 **Section sources**
 - [bot.py:50-150](file://bot.py#L50-L150)
@@ -218,8 +242,16 @@ RESPONSE --> END
 - **silence_detection**: Detect and remove silent portions
 - **metadata_extraction**: Extract audio metadata (duration, format)
 
+### Performance Optimized Processing
+- **parallel_processing**: Enable parallel audio processing
+- **gpu_acceleration**: Use GPU for intensive audio operations
+- **streaming_mode**: Process audio in streaming fashion for large files
+- **memory_mapping**: Use memory-mapped files for large audio processing
+
+**Updated** Added performance optimized processing options including parallel processing, GPU acceleration, and streaming mode for handling large audio files efficiently.
+
 **Section sources**
-- [voice_logger_bot.py:150-300](file://voice_logger_bot.py#L150-300)
+- [voice_logger_bot.py:150-300](file://voice_logger_bot.py#L150-L300)
 
 ## Data Engineering Pipeline Configuration
 
@@ -312,6 +344,13 @@ Enable monitoring and collect performance metrics:
 | `throughput` | records_per_second, batch_completion_rate | throughput_metrics |
 | `resource_usage` | disk_io, network_bandwidth, file_descriptors | resource_metrics |
 
+### Performance Optimizations
+- **parallel_execution**: Enable parallel processing of data batches
+- **memory_optimization**: Optimize memory usage for large datasets
+- **caching_strategy**: Implement intelligent caching for frequently accessed data
+- **connection_pooling**: Use connection pooling for database operations
+- **async_processing**: Enable asynchronous processing for I/O bound operations
+
 ### Pipeline Execution Examples
 Common pipeline execution patterns:
 
@@ -319,6 +358,8 @@ Common pipeline execution patterns:
 2. **Batch Processing**: Scheduled batch jobs for large datasets
 3. **Event-driven Processing**: Triggered by specific events or data changes
 4. **Hybrid Processing**: Combination of streaming and batch processing
+
+**Updated** Added comprehensive performance optimization options including parallel execution, memory optimization, caching strategies, and async processing capabilities to enhance pipeline efficiency and scalability.
 
 **Section sources**
 - [stock_bot/config.py:100-200](file://stock_bot/config.py#L100-L200)
@@ -374,6 +415,15 @@ With the updated dependencies, the bot now supports:
 - **Audit Trails**: Comprehensive logging of all data transformations
 - **Data Lineage**: Track data flow through processing stages
 - **Quality Metrics**: Automated data quality assessment and reporting
+
+### Performance Optimized Storage
+- **Write Buffering**: Buffered writes for improved I/O performance
+- **Index Optimization**: Optimized database indexes for query performance
+- **Partitioning**: Data partitioning for large datasets
+- **Compression**: Efficient data compression for storage optimization
+- **Caching**: Intelligent caching layer for frequently accessed data
+
+**Updated** Enhanced storage configuration with performance-optimized options including write buffering, index optimization, data partitioning, and intelligent caching for improved storage efficiency.
 
 **Section sources**
 - [voice_logger_bot.py:200-400](file://voice_logger_bot.py#L200-L400)
@@ -439,6 +489,10 @@ The updated requirements.txt now includes:
 - **Scientific Computing**: Additional libraries for advanced processing
 - **Task Scheduling**: APScheduler for pipeline orchestration
 - **Data Serialization**: PyArrow and FastParquet for efficient storage
+- **Performance Monitoring**: Libraries for performance profiling and metrics collection
+- **Memory Management**: Tools for memory optimization and garbage collection tuning
+
+**Updated** Enhanced dependency management section with new performance monitoring and memory management libraries to support the enhanced optimization capabilities.
 
 **Section sources**
 - [requirements.txt:1-100](file://requirements.txt#L1-L100)
@@ -481,12 +535,20 @@ The updated requirements.txt now includes:
 - **Monitor pipeline execution for anomalies**
 - **Secure configuration files and credentials**
 
+### Performance Security
+- **Monitor resource usage for potential abuse**
+- **Implement rate limiting for API calls**
+- **Validate input sizes to prevent memory exhaustion**
+- **Set appropriate timeouts to prevent resource leaks**
+
 ### Best Practices
 - **Regular security audits**
 - **Keep dependencies updated**
 - **Use virtual environments**
 - **Implement proper logging without sensitive data**
 - **Monitor for security vulnerabilities in dependencies**
+
+**Updated** Added performance security considerations including resource usage monitoring, rate limiting, input validation, and timeout management to ensure secure operation under high load conditions.
 
 **Section sources**
 - [stock_bot/config.py:100-200](file://stock_bot/config.py#L100-L200)
@@ -559,6 +621,26 @@ For optimizing pipeline performance:
 4. **Implement caching**: Cache frequently accessed data
 5. **Monitor resource usage**: Track CPU, memory, and I/O utilization
 
+### Scenario 9: Stock Bot Performance Tuning
+For optimizing stock bot performance:
+
+1. **Set optimization level**: Configure `optimization_level=advanced` for better performance
+2. **Adjust memory management**: Set `memory_management=aggressive` for high-throughput scenarios
+3. **Enable resource monitoring**: Turn on `resource_monitoring=true` for performance insights
+4. **Configure thread safety**: Set appropriate `thread_safety` level based on concurrency needs
+5. **Tune performance logging**: Adjust `performance_logging` granularity for detailed metrics
+
+### Scenario 10: Memory Optimization for Large Datasets
+For handling large datasets efficiently:
+
+1. **Configure memory limits**: Set `MEMORY_LIMIT` appropriately for your system
+2. **Enable streaming mode**: Use `streaming_mode=true` for large file processing
+3. **Implement chunked processing**: Process data in smaller chunks
+4. **Use memory mapping**: Enable `memory_mapping=true` for large file operations
+5. **Monitor memory usage**: Set up memory usage alerts and auto-scaling
+
+**Updated** Added two new customization scenarios focusing on stock bot performance tuning and memory optimization for large datasets, reflecting the enhanced configuration capabilities.
+
 **Section sources**
 - [bot.py:100-250](file://bot.py#L100-L250)
 - [voice_logger_bot.py:250-500](file://voice_logger_bot.py#L250-L500)
@@ -607,6 +689,13 @@ For optimizing pipeline performance:
 - **Concurrent processing**: Adjust thread pool sizes
 - **Pipeline tuning**: Optimize batch sizes and parallel processing settings
 
+#### Stock Bot Performance Issues
+- **Memory leaks**: Monitor memory usage patterns and identify leaks
+- **Thread contention**: Check for thread blocking and synchronization issues
+- **Resource bottlenecks**: Identify CPU, memory, or I/O bottlenecks
+- **Connection pooling**: Verify database connection pool configuration
+- **Garbage collection**: Monitor GC performance and adjust parameters
+
 ### Debugging Techniques
 - **Enable debug logging**: Set `LOG_LEVEL=DEBUG` for verbose output
 - **Use logging framework**: Implement structured logging
@@ -614,6 +703,8 @@ For optimizing pipeline performance:
 - **Profile performance**: Identify bottlenecks in processing pipeline
 - **Database query profiling**: Analyze slow queries and execution plans
 - **Pipeline tracing**: Enable detailed tracing for pipeline execution
+- **Memory profiling**: Use memory profilers to identify memory issues
+- **Thread analysis**: Analyze thread usage and contention patterns
 
 ### Recovery Procedures
 - **Backup restoration**: Restore from latest backup if data corruption occurs
@@ -622,13 +713,26 @@ For optimizing pipeline performance:
 - **Data migration**: Handle schema changes and data migrations
 - **Dependency recovery**: Reinstall dependencies if corrupted
 - **Pipeline recovery**: Resume interrupted pipeline executions
+- **Performance recovery**: Reset performance counters and clear caches
+
+### Performance Troubleshooting
+- **Resource monitoring**: Set up comprehensive resource monitoring
+- **Performance baselines**: Establish performance baselines for comparison
+- **Load testing**: Perform load testing to identify breaking points
+- **Capacity planning**: Plan capacity based on performance metrics
+- **Auto-scaling**: Implement auto-scaling based on resource utilization
+- **Graceful degradation**: Implement graceful degradation under high load
+
+**Updated** Enhanced troubleshooting guide with new sections for stock bot performance issues, performance debugging techniques, and performance recovery procedures to address the enhanced optimization capabilities.
 
 **Section sources**
 - [data_eng/db.py:50-150](file://data_eng/db.py#L50-L150)
 
 ## Conclusion
 
-The Telegram Voice Logger Bot provides a robust and configurable platform for capturing and processing voice messages from Telegram conversations. With the recent updates to enhance data processing and analysis capabilities, the bot now offers significantly expanded functionality for advanced data analysis, data engineering pipelines, and comprehensive reporting. By understanding the configuration options and customization capabilities outlined in this document, users can tailor the bot to meet their specific requirements while maintaining security and performance standards.
+The Telegram Voice Logger Bot provides a robust and configurable platform for capturing and processing voice messages from Telegram conversations. With the recent updates to enhance data processing and analysis capabilities, the bot now offers significantly expanded functionality for advanced data analysis, data engineering pipelines, and comprehensive reporting. The enhanced stock bot configuration with performance optimization settings provides even greater flexibility and efficiency for various deployment scenarios.
+
+By understanding the configuration options and customization capabilities outlined in this document, users can tailor the bot to meet their specific requirements while maintaining security and performance standards. The addition of comprehensive performance optimization settings transforms the bot into a highly efficient and scalable solution capable of handling demanding workloads.
 
 Key takeaways include:
 - Proper environment variable management for secure configuration
@@ -639,5 +743,9 @@ Key takeaways include:
 - Enhanced data processing capabilities with modern analytical tools
 - Sophisticated data engineering pipeline for advanced data transformations
 - Robust scheduling and monitoring capabilities for production deployments
+- **New**: Comprehensive performance optimization settings for enhanced efficiency
+- **New**: Advanced memory management and resource allocation controls
+- **New**: Parallel processing and asynchronous operation capabilities
+- **New**: Performance monitoring and profiling tools for optimization
 
-With the guidance provided here, users can effectively deploy, configure, and maintain their Telegram Voice Logger Bot in production environments while ensuring optimal performance, security, and advanced data analysis capabilities. The addition of the data engineering pipeline transforms the bot from a simple voice logger into a comprehensive data processing platform capable of handling complex analytical workflows.
+With the guidance provided here, users can effectively deploy, configure, and maintain their Telegram Voice Logger Bot in production environments while ensuring optimal performance, security, and advanced data analysis capabilities. The addition of the data engineering pipeline and performance optimization settings transforms the bot from a simple voice logger into a comprehensive data processing platform capable of handling complex analytical workflows with high efficiency and reliability.
