@@ -92,7 +92,7 @@ def run_daily_pipeline(tickers: list[str]) -> None:
     ingest_global_news()
 
     # 4. Google Finance AI overview (Playwright scrape)
-    log.info("Pipeline: scraping Google Finance overviews...")
+    log.info("Pipeline: scraping Google Finance overviews, bull and bear view...")
     for ticker in tickers:
         try:
             ingest_gfinance_overview(ticker)

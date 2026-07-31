@@ -4,7 +4,7 @@
 
 | # | Run | What it does |
 |---|-----|--------------|
-| 1 | `llama-server -hf empero-ai/Qwythos-9B-v2-GGUF:Q8_0 --alias MyQwythos --port 10000` | LLM server (skip if already running) |
+| 1 | `llama-server -hf empero-ai/Qwythos-9B-v2-GGUF:Q8_0 --alias MyQwythos --port 10000 --spec-type draft-mtp --ctx-size 96000` | LLM server (skip if already running) |
 | 2 | `venv\Scripts\python voice_logger_bot.py` | Start bot |
 
 ## Daily (automated)

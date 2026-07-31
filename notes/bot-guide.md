@@ -4,7 +4,7 @@
 
 ```bash
 # 1. Make sure llama-server is running (port 10000)
-llama-server -hf empero-ai/Qwythos-9B-v2-GGUF:Q8_0 --alias MyQwythos --port 10000
+llama-server -hf empero-ai/Qwythos-9B-v2-GGUF:Q8_0 --alias MyQwythos --port 10000 --spec-type draft-mtp --ctx-size 96000
 
 # 2. Start the bot
 venv\Scripts\python voice_logger_bot.py

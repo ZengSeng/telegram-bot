@@ -18,6 +18,8 @@ LLAMA_CMD = [
     "-hf", "empero-ai/Qwythos-9B-v2-GGUF:Q8_0",
     "--alias", "MyQwythos",
     "--port", "10000",
+    "--spec-type", "draft-mtp",
+    "--ctx-size", "96000",
 ]
 LLAMA_URL = "http://127.0.0.1:10000/v1/chat/completions"
 LLAMA_STARTUP_WAIT_SECONDS = 1

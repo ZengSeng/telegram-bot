@@ -1,5 +1,22 @@
 
 
+
+
+How to set risk appetite
+
+Can we analyse all ticker and decide which one to buy
+
+What is overweight
+
+/summary report be more consistent
+
+
+What is sell action doing? to cut loss or when we have profit
+
+If we completely sold a ticker, will it go to watchlist
+
+Put yesterday instead of 30D
+
 And then tell me buy or sell
 
 
