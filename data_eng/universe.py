@@ -22,21 +22,6 @@ SECTOR_GROUPS: dict[int, list[str]] = {
     4: ["healthcare", "consumer-cyclical"],
 }
 
-_CREATE_TABLE = """
-CREATE TABLE IF NOT EXISTS stock_universe (
-    ticker          VARCHAR PRIMARY KEY,
-    company_name    VARCHAR,
-    sector          VARCHAR,
-    industry        VARCHAR,
-    rating          VARCHAR,
-    group_id        SMALLINT,
-    sector_weight   DOUBLE,
-    company_weight  DOUBLE,
-    date_added      DATE,
-    last_updated    DATE
-);
-"""
-
 
 class UniverseScraper:
     """Scrapes Yahoo Finance sector/industry/company data into stock_universe."""
@@ -55,7 +40,6 @@ class UniverseScraper:
             return set()
 
         conn = get_connection()
-        conn.execute(_CREATE_TABLE)
 
         tickers: set[str] = set()
 
@@ -87,24 +71,22 @@ class UniverseScraper:
                             if isinstance(rating, np.generic):
                                 rating = str(rating)
 
+                            # Preserve original date_added on re-scrape
+                            existing = conn.execute(
+                                "SELECT date_added FROM stock_universe WHERE ticker = ?",
+                                [symbol],
+                            ).fetchone()
+                            date_added = existing[0] if existing else self.today
+
                             conn.execute(
-                                """INSERT INTO stock_universe
-                                   (ticker, company_name, sector, industry, rating,
-                                    group_id, sector_weight, company_weight,
-                                    date_added, last_updated)
-                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                   ON CONFLICT (ticker) DO UPDATE SET
-                                       company_name = EXCLUDED.company_name,
-                                       sector = EXCLUDED.sector,
-                                       industry = EXCLUDED.industry,
-                                       rating = EXCLUDED.rating,
-                                       group_id = EXCLUDED.group_id,
-                                       sector_weight = EXCLUDED.sector_weight,
-                                       company_weight = EXCLUDED.company_weight,
-                                       last_updated = EXCLUDED.last_updated
-                                """,
+                                """INSERT OR REPLACE INTO stock_universe
+                                   (ticker, date_added, company_name, sector, industry,
+                                    rating, group_id, sector_weight, company_weight,
+                                    last_updated)
+                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                                 [
                                     symbol,
+                                    date_added,
                                     row.get("name"),
                                     sector_key,
                                     industry_name,
@@ -112,7 +94,6 @@ class UniverseScraper:
                                     group_id,
                                     sector_weight,
                                     company_weight,
-                                    self.today,
                                     self.today,
                                 ],
                             )
@@ -151,7 +132,6 @@ class UniverseScraper:
                         "Strong Buy", "Buy", "Hold", "Sell", "Underperform".
         """
         conn = get_connection()
-        conn.execute(_CREATE_TABLE)
 
         query = "SELECT ticker FROM stock_universe WHERE 1=1"
         params: list = []
@@ -176,7 +156,6 @@ class UniverseScraper:
     def get_shortlisted_tickers(self) -> list[str]:
         """Return Strong Buy + Buy rated tickers (for enrichment/analysis)."""
         conn = get_connection()
-        conn.execute(_CREATE_TABLE)
         rows = conn.execute(
             "SELECT ticker FROM stock_universe WHERE rating IN ('Strong Buy', 'Buy')"
         ).fetchall()

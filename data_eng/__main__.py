@@ -6,12 +6,13 @@ import logging
 from pathlib import Path
 
 from .ingest import batch_ingest_prices, ingest_all
-from .pipeline import run_daily_pipeline, run_universe_build, run_universe_group
+from .pipeline import run_daily_pipeline, run_night_pipeline, run_universe_build, run_universe_group
 from .screener import run_screener
 from .candidates import select_candidates
 from .events import detect_events_batch
 from .portfolio_engine import run_portfolio_engine
 from .portfolio_review import run_portfolio_review
+from .enrich import run_enrich
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -71,9 +72,32 @@ def main():
         "--review", action="store_true",
         help="Run LLM portfolio review (investment committee)"
     )
+    parser.add_argument(
+        "--enrich", action="store_true",
+        help="Bulk-enrich fundamentals for universe tickers (rolling N/day)"
+    )
+    parser.add_argument(
+        "--sector", type=str, default=None,
+        help="Filter --enrich by sector (e.g. technology)"
+    )
+    parser.add_argument(
+        "--limit", type=int, default=100,
+        help="Max tickers per --enrich run (default: 100)"
+    )
+    parser.add_argument(
+        "--night", action="store_true",
+        help="Run night pipeline: universe refresh + batch prices + enrich (3 PM NZT)"
+    )
+    parser.add_argument(
+        "--batch-universe", action="store_true",
+        help="Batch-download incremental prices for all universe tickers"
+    )
     args = parser.parse_args()
 
-    if args.universe:
+    if args.night:
+        print("Running night pipeline (universe + prices + enrich)...")
+        run_night_pipeline(enrich_limit=args.limit)
+    elif args.universe:
         print("Building full stock universe...")
         run_universe_build()
     elif args.universe_group:
@@ -145,12 +169,25 @@ def main():
             print(f"\n{review}")
         else:
             print("No review generated (run --portfolio first).")
+    elif args.enrich:
+        print(f"Enriching fundamentals (sector={args.sector or 'all'}, limit={args.limit})...")
+        count = run_enrich(sector=args.sector, limit=args.limit)
+        print(f"Done: {count} tickers enriched.")
     elif args.batch:
         tickers = _load_watchlist()
         if not tickers:
             print("Watchlist is empty. Add tickers via /watch or edit data/watchlist.json")
             return
         print(f"Batch downloading prices for: {', '.join(tickers)}")
+        batch_ingest_prices(tickers)
+    elif args.batch_universe:
+        from .universe import UniverseScraper
+        scraper = UniverseScraper()
+        tickers = scraper.get_universe_tickers()
+        if not tickers:
+            print("Universe is empty. Run --universe first.")
+            return
+        print(f"Batch downloading prices for {len(tickers)} universe tickers...")
         batch_ingest_prices(tickers)
     elif args.tickers:
         for ticker in args.tickers:

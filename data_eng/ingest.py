@@ -649,15 +649,46 @@ def batch_ingest_prices(tickers: list[str], lookback_days: int = 3 * 365) -> int
         conn.close()
         return 0
 
-    # Batch download using earliest start
-    min_start = min(s for _, s in to_download)
-    batch_tickers = [t for t, _ in to_download]
-    log.info("Batch downloading %d tickers from %s", len(batch_tickers), min_start)
+    # Split: incremental (has data, recent start) vs new (no data, full backfill)
+    # Cap incremental lookback to 30 days to avoid one stale ticker dragging the batch
+    incremental_cutoff = today - timedelta(days=5)
+    incremental = [(t, s) for t, s in to_download if t in latest_dates and s >= incremental_cutoff]
+    backfill = [(t, s) for t, s in to_download if t not in latest_dates or s < incremental_cutoff]
+
+    total_rows = 0
+
+    # --- Batch 1: incremental (fast, max 30-day lookback) ---
+    if incremental:
+        inc_start = min(s for _, s in incremental)
+        inc_tickers = [t for t, _ in incremental]
+        log.info("Batch downloading %d tickers from %s (incremental)", len(inc_tickers), inc_start)
+        total_rows += _download_and_insert(conn, inc_tickers, inc_start, today, incremental)
+
+    # --- Batch 2: backfill (new or very stale tickers, one at a time) ---
+    if backfill:
+        log.info("Backfilling %d tickers individually (new or >30d stale)", len(backfill))
+        for t, s in backfill:
+            try:
+                total_rows += _download_and_insert(conn, [t], s, today, [(t, s)])
+            except Exception as e:
+                log.warning("Backfill failed for %s: %s", t, e)
+            time.sleep(0.5)
+
+    conn.close()
+    log.info("Batch ingest complete: %d rows for %d tickers", total_rows, len(to_download))
+    return total_rows
+
+
+def _download_and_insert(
+    conn, batch_tickers: list[str], start: date, end: date, to_download: list[tuple]
+) -> int:
+    """Download prices for a batch and insert into DB. Returns row count."""
+    today = end
 
     try:
         data = yf.download(
             tickers=batch_tickers,
-            start=min_start.strftime("%Y-%m-%d"),
+            start=start.strftime("%Y-%m-%d"),
             end=today.strftime("%Y-%m-%d"),
             interval="1d",
             auto_adjust=True,
@@ -667,12 +698,10 @@ def batch_ingest_prices(tickers: list[str], lookback_days: int = 3 * 365) -> int
         )
     except Exception as e:
         log.error("Batch download failed: %s", e)
-        conn.close()
         return 0
 
     if data is None or data.empty:
         log.warning("Batch download returned no data.")
-        conn.close()
         return 0
 
     total_rows = 0
@@ -731,8 +760,6 @@ def batch_ingest_prices(tickers: list[str], lookback_days: int = 3 * 365) -> int
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", rows)
                 total_rows += len(rows)
 
-    conn.close()
-    log.info("Batch ingest complete: %d rows for %d tickers", total_rows, len(batch_tickers))
     return total_rows
 
 

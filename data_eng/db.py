@@ -231,6 +231,20 @@ CREATE TABLE IF NOT EXISTS portfolio_reviews (
     review_text     VARCHAR NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS stock_universe (
+    ticker          VARCHAR NOT NULL,
+    date_added      DATE NOT NULL,
+    company_name    VARCHAR,
+    sector          VARCHAR,
+    industry        VARCHAR,
+    rating          VARCHAR,
+    group_id        SMALLINT,
+    sector_weight   DOUBLE,
+    company_weight  DOUBLE,
+    last_updated    DATE,
+    PRIMARY KEY (ticker, date_added)
+);
+
 -- Add corporate action columns to daily_prices (safe for existing databases)
 ALTER TABLE daily_prices ADD COLUMN IF NOT EXISTS dividends DECIMAL(18,4) DEFAULT 0;
 ALTER TABLE daily_prices ADD COLUMN IF NOT EXISTS stock_splits DECIMAL(18,4) DEFAULT 0;

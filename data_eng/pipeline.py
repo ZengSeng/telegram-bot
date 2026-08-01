@@ -166,6 +166,16 @@ def run_daily_pipeline(tickers: list[str], use_smart_scheduling: bool = False) -
     except Exception as e:
         log.warning("Pipeline: news summarization failed (non-fatal): %s", e)
 
+    # 5b. Bulk fundamentals enrichment (rolling N/day for universe)
+    try:
+        from .enrich import run_enrich
+
+        log.info("Pipeline: enriching universe fundamentals (rolling batch)...")
+        enriched_count = run_enrich(limit=100)
+        log.info("Pipeline: enriched %d tickers", enriched_count)
+    except Exception as e:
+        log.warning("Pipeline: enrichment failed (non-fatal): %s", e)
+
     # 6. Quantitative screener (percentile-rank scoring)
     log.info("Pipeline: running quantitative screener...")
     try:
@@ -284,3 +294,42 @@ def run_universe_group(group_id: int) -> None:
         log.info("Group %d price ingest complete in %.1fs", group_id, time.time() - t1)
 
     log.info("=== Universe group %d complete (%.1fs total) ===", group_id, time.time() - t0)
+
+
+# ---------------------------------------------------------------------------
+# Night pipeline (3 PM NZT): universe refresh + prices + enrich
+# ---------------------------------------------------------------------------
+
+
+def run_night_pipeline(enrich_limit: int = 100) -> None:
+    """Night pipeline: refresh universe, batch prices, then enrich fundamentals.
+
+    Designed to run at 3 PM NZT (after US pre-market data settles).
+    1. Scrape universe (updates ratings, discovers new tickers)
+    2. Batch-ingest prices for all universe tickers
+    3. Enrich fundamentals (rolling N/day)
+    """
+    from .universe import UniverseScraper
+    from .enrich import run_enrich
+
+    log.info("=== Night pipeline started ===")
+    t0 = time.time()
+
+    # 1. Universe scrape (all groups)
+    scraper = UniverseScraper()
+    all_tickers = scraper.scrape_all()
+    log.info("Night: universe scrape done — %d tickers in %.1fs",
+             len(all_tickers), time.time() - t0)
+
+    # 2. Batch prices for full universe
+    if all_tickers:
+        t1 = time.time()
+        batch_ingest_prices(list(all_tickers))
+        log.info("Night: price ingest done in %.1fs", time.time() - t1)
+
+    # 3. Enrich fundamentals (rolling batch)
+    t2 = time.time()
+    enriched = run_enrich(limit=enrich_limit)
+    log.info("Night: enriched %d tickers in %.1fs", enriched, time.time() - t2)
+
+    log.info("=== Night pipeline complete (%.1fs total) ===", time.time() - t0)
