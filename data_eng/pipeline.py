@@ -15,7 +15,7 @@ from .ingest import (
     ingest_global_news,
     ingest_news,
 )
-from .analysis_ingest import has_decision_today, ingest_analysis_decision
+from .analysis_ingest import ingest_analysis_decision
 from .gfinance import ingest_gfinance_overview
 from .summarize import generate_news_summaries
 
@@ -23,6 +23,50 @@ log = logging.getLogger(__name__)
 
 # Days after last report_date before we expect the next quarterly filing
 FINANCIALS_REFRESH_DAYS = 80
+
+# Staleness thresholds (days) for smart scheduling
+NEWS_STALE_DAYS = 1
+ENRICHED_STALE_DAYS = 3
+ANALYST_STALE_DAYS = 3
+FUNDAMENTALS_STALE_DAYS = 7
+
+
+def _is_stale(table: str, date_col: str, ticker: str, max_age_days: int) -> bool:
+    """Check if latest data for ticker in table is older than max_age_days.
+
+    Returns True if no data exists or data is stale.
+    """
+    conn = get_connection()
+    row = conn.execute(
+        f"SELECT MAX({date_col}) FROM {table} WHERE ticker = ?", [ticker]
+    ).fetchone()
+    conn.close()
+
+    if not row or not row[0]:
+        return True
+
+    last_date = row[0] if isinstance(row[0], date) else row[0].date()
+    return date.today() - last_date >= timedelta(days=max_age_days)
+
+
+def should_ingest_news(ticker: str) -> bool:
+    """News changes daily — refresh if older than 1 day."""
+    return _is_stale("news", "date", ticker, NEWS_STALE_DAYS)
+
+
+def should_ingest_enriched(ticker: str) -> bool:
+    """Growth estimates + targets change slowly — 3-day threshold."""
+    return _is_stale("ticker_enriched", "date_fetched", ticker, ENRICHED_STALE_DAYS)
+
+
+def should_ingest_analyst(ticker: str) -> bool:
+    """Analyst targets overlap with enrichment cycle — 3-day threshold."""
+    return _is_stale("analyst_targets", "date_fetched", ticker, ANALYST_STALE_DAYS)
+
+
+def should_ingest_fundamentals(ticker: str) -> bool:
+    """Company info snapshot — 7-day threshold."""
+    return _is_stale("fundamentals", "date_fetched", ticker, FUNDAMENTALS_STALE_DAYS)
 
 
 def should_ingest_financials(ticker: str) -> bool:
@@ -46,12 +90,15 @@ def should_ingest_financials(ticker: str) -> bool:
     return date.today() >= projected_next
 
 
-def run_daily_pipeline(tickers: list[str]) -> None:
+def run_daily_pipeline(tickers: list[str], use_smart_scheduling: bool = False) -> None:
     """Run the full daily data refresh for all watchlist tickers.
 
     1. Batch-download prices (incremental) for tickers + NZDUSD forex
     2. Per-ticker: news, analyst targets, enriched, financials (smart-scheduled)
     3. Global news
+
+    When use_smart_scheduling=True, each per-ticker ingestion is gated by a
+    staleness check to avoid unnecessary API calls.
     """
     if not tickers:
         log.warning("Pipeline called with empty tickers list.")
@@ -69,16 +116,28 @@ def run_daily_pipeline(tickers: list[str]) -> None:
     for ticker in tickers:
         log.info("Pipeline: processing %s", ticker)
 
-        ingest_news(ticker)
+        if not use_smart_scheduling or should_ingest_news(ticker):
+            ingest_news(ticker)
+        else:
+            log.info("Pipeline: news still fresh for %s, skipping", ticker)
         time.sleep(API_PAUSE)
 
-        ingest_analyst_targets(ticker)
+        if not use_smart_scheduling or should_ingest_analyst(ticker):
+            ingest_analyst_targets(ticker)
+        else:
+            log.info("Pipeline: analyst targets still fresh for %s, skipping", ticker)
         time.sleep(API_PAUSE)
 
-        ingest_enriched(ticker)
+        if not use_smart_scheduling or should_ingest_enriched(ticker):
+            ingest_enriched(ticker)
+        else:
+            log.info("Pipeline: enriched still fresh for %s, skipping", ticker)
         time.sleep(API_PAUSE)
 
-        ingest_fundamentals(ticker)
+        if not use_smart_scheduling or should_ingest_fundamentals(ticker):
+            ingest_fundamentals(ticker)
+        else:
+            log.info("Pipeline: fundamentals still fresh for %s, skipping", ticker)
         time.sleep(API_PAUSE)
 
         if should_ingest_financials(ticker):
@@ -107,12 +166,40 @@ def run_daily_pipeline(tickers: list[str]) -> None:
     except Exception as e:
         log.warning("Pipeline: news summarization failed (non-fatal): %s", e)
 
-    # 6. TradingAgents analysis + decision ingestion (uses local LLM)
-    log.info("Pipeline: running TradingAgents analysis...")
-    for ticker in tickers:
+    # 6. Quantitative screener (percentile-rank scoring)
+    log.info("Pipeline: running quantitative screener...")
+    try:
+        from .screener import run_screener
+
+        scores = run_screener(tickers)
+        if not scores.empty:
+            top = scores.sort_values("overall_score", ascending=False).head(5)
+            log.info("Pipeline: screener top 5: %s", list(top.index))
+    except Exception as e:
+        log.warning("Pipeline: screener failed (non-fatal): %s", e)
+
+    # 7. Candidate selection (sector-balanced, correlation-filtered)
+    log.info("Pipeline: selecting candidates...")
+    try:
+        from .candidates import select_candidates
+
+        candidates = select_candidates()
+        if not candidates.empty:
+            log.info("Pipeline: %d candidates selected: %s", len(candidates), list(candidates["ticker"]))
+    except Exception as e:
+        log.warning("Pipeline: candidate selection failed (non-fatal): %s", e)
+
+    # 8. TradingAgents analysis (candidates + watchlist, event-gated)
+    from .candidates import get_analysis_tickers
+
+    analysis_tickers = get_analysis_tickers(tickers)
+    log.info("Pipeline: running TradingAgents on %d tickers...", len(analysis_tickers))
+    for ticker in analysis_tickers:
         try:
-            if has_decision_today(ticker):
-                log.info("Pipeline: %s already analyzed today, skipping", ticker)
+            from .events import should_run_analysis
+
+            if not should_run_analysis(ticker):
+                log.info("Pipeline: %s — no events, reusing last analysis", ticker)
                 continue
 
             from analysis.runner import run_analysis
@@ -124,4 +211,76 @@ def run_daily_pipeline(tickers: list[str]) -> None:
         except Exception as e:
             log.warning("Pipeline: analysis failed for %s (non-fatal): %s", ticker, e)
 
+    # 9. Portfolio engine (deterministic rules on decisions + scores)
+    try:
+        from .portfolio_engine import run_portfolio_engine
+
+        log.info("Pipeline: running portfolio engine...")
+        results = run_portfolio_engine()
+        buys = [r for r in results if r["action"] == "BUY"]
+        sells = [r for r in results if r["action"] == "SELL"]
+        log.info("Pipeline: portfolio engine done — %d BUY, %d SELL", len(buys), len(sells))
+    except Exception as e:
+        log.warning("Pipeline: portfolio engine failed (non-fatal): %s", e)
+
+    # 10. Portfolio review (LLM investment committee)
+    try:
+        from .portfolio_review import run_portfolio_review
+
+        log.info("Pipeline: running portfolio review...")
+        review = run_portfolio_review()
+        if review and not review.startswith("("):
+            log.info("Pipeline: portfolio review complete (%d chars)", len(review))
+        else:
+            log.info("Pipeline: portfolio review skipped (%s)", review or "no decisions")
+    except Exception as e:
+        log.warning("Pipeline: portfolio review failed (non-fatal): %s", e)
+
     log.info("=== Daily pipeline complete ===")
+
+
+# ---------------------------------------------------------------------------
+# Universe build / group refresh
+# ---------------------------------------------------------------------------
+
+
+def run_universe_build() -> None:
+    """Scrape the full stock universe, then batch-ingest prices for all tickers."""
+    from .universe import UniverseScraper
+
+    log.info("=== Universe build started ===")
+    t0 = time.time()
+
+    scraper = UniverseScraper()
+    all_tickers = scraper.scrape_all()
+
+    elapsed_scrape = time.time() - t0
+    log.info("Universe scrape complete: %d tickers in %.1fs", len(all_tickers), elapsed_scrape)
+
+    if all_tickers:
+        t1 = time.time()
+        batch_ingest_prices(list(all_tickers))
+        log.info("Universe price ingest complete in %.1fs", time.time() - t1)
+
+    log.info("=== Universe build complete (%.1fs total) ===", time.time() - t0)
+
+
+def run_universe_group(group_id: int) -> None:
+    """Scrape one sector group, then batch-ingest prices for that group's tickers."""
+    from .universe import UniverseScraper
+
+    log.info("=== Universe group %d started ===", group_id)
+    t0 = time.time()
+
+    scraper = UniverseScraper()
+    tickers = scraper.scrape_sector_group(group_id)
+
+    elapsed_scrape = time.time() - t0
+    log.info("Group %d scrape complete: %d tickers in %.1fs", group_id, len(tickers), elapsed_scrape)
+
+    if tickers:
+        t1 = time.time()
+        batch_ingest_prices(list(tickers))
+        log.info("Group %d price ingest complete in %.1fs", group_id, time.time() - t1)
+
+    log.info("=== Universe group %d complete (%.1fs total) ===", group_id, time.time() - t0)

@@ -185,6 +185,55 @@ CREATE TABLE IF NOT EXISTS ticker_enriched (
 
     PRIMARY KEY (ticker, date_fetched)
 );
+
+CREATE TABLE IF NOT EXISTS screener_scores (
+    ticker          VARCHAR NOT NULL,
+    date_scored     DATE NOT NULL,
+    quality_score   DOUBLE,
+    value_score     DOUBLE,
+    momentum_score  DOUBLE,
+    sentiment_score DOUBLE,
+    risk_score      DOUBLE,
+    overall_score   DOUBLE,
+    PRIMARY KEY (ticker, date_scored)
+);
+
+CREATE TABLE IF NOT EXISTS candidates (
+    ticker          VARCHAR NOT NULL,
+    date_selected   DATE NOT NULL,
+    sector          VARCHAR,
+    overall_score   DOUBLE,
+    removed_reason  VARCHAR,
+    PRIMARY KEY (ticker, date_selected)
+);
+
+CREATE TABLE IF NOT EXISTS events (
+    ticker      VARCHAR NOT NULL,
+    date        DATE NOT NULL,
+    event_type  VARCHAR NOT NULL,
+    details     VARCHAR,
+    PRIMARY KEY (ticker, date, event_type)
+);
+
+CREATE TABLE IF NOT EXISTS portfolio_decisions (
+    ticker          VARCHAR NOT NULL,
+    date            DATE NOT NULL,
+    action          VARCHAR NOT NULL,
+    position_pct    DOUBLE,
+    shares          DOUBLE,
+    stop_loss       DOUBLE,
+    reason          VARCHAR,
+    PRIMARY KEY (ticker, date)
+);
+
+CREATE TABLE IF NOT EXISTS portfolio_reviews (
+    date            DATE NOT NULL PRIMARY KEY,
+    review_text     VARCHAR NOT NULL
+);
+
+-- Add corporate action columns to daily_prices (safe for existing databases)
+ALTER TABLE daily_prices ADD COLUMN IF NOT EXISTS dividends DECIMAL(18,4) DEFAULT 0;
+ALTER TABLE daily_prices ADD COLUMN IF NOT EXISTS stock_splits DECIMAL(18,4) DEFAULT 0;
 """
 
 

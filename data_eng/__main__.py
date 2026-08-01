@@ -6,7 +6,12 @@ import logging
 from pathlib import Path
 
 from .ingest import batch_ingest_prices, ingest_all
-from .pipeline import run_daily_pipeline
+from .pipeline import run_daily_pipeline, run_universe_build, run_universe_group
+from .screener import run_screener
+from .candidates import select_candidates
+from .events import detect_events_batch
+from .portfolio_engine import run_portfolio_engine
+from .portfolio_review import run_portfolio_review
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -34,15 +39,112 @@ def main():
         "--daily", action="store_true",
         help="Run full daily pipeline (prices, news, enriched, targets, financials)"
     )
+    parser.add_argument(
+        "--universe", action="store_true",
+        help="Scrape full stock universe and batch-ingest prices for all tickers"
+    )
+    parser.add_argument(
+        "--universe-group", type=int, choices=[1, 2, 3, 4], metavar="N",
+        help="Scrape one sector group (1-4) and ingest its prices"
+    )
+    parser.add_argument(
+        "--daily-smart", action="store_true",
+        help="Run daily pipeline with smart scheduling (skip fresh data)"
+    )
+    parser.add_argument(
+        "--screen", action="store_true",
+        help="Run quantitative screener on all tickers with data"
+    )
+    parser.add_argument(
+        "--candidates", action="store_true",
+        help="Select sector-balanced candidates from screener scores"
+    )
+    parser.add_argument(
+        "--events", action="store_true",
+        help="Detect events for watchlist tickers (price moves, news, technicals)"
+    )
+    parser.add_argument(
+        "--portfolio", action="store_true",
+        help="Run deterministic portfolio engine (rules-based trade proposals)"
+    )
+    parser.add_argument(
+        "--review", action="store_true",
+        help="Run LLM portfolio review (investment committee)"
+    )
     args = parser.parse_args()
 
-    if args.daily:
+    if args.universe:
+        print("Building full stock universe...")
+        run_universe_build()
+    elif args.universe_group:
+        print(f"Building universe group {args.universe_group}...")
+        run_universe_group(args.universe_group)
+    elif args.daily:
         tickers = _load_watchlist()
         if not tickers:
             print("Watchlist is empty. Add tickers via /watch or edit data/watchlist.json")
             return
         print(f"Running daily pipeline for: {', '.join(tickers)}")
         run_daily_pipeline(tickers)
+    elif args.daily_smart:
+        tickers = _load_watchlist()
+        if not tickers:
+            print("Watchlist is empty. Add tickers via /watch or edit data/watchlist.json")
+            return
+        print(f"Running smart daily pipeline for: {', '.join(tickers)}")
+        run_daily_pipeline(tickers, use_smart_scheduling=True)
+    elif args.screen:
+        print("Running quantitative screener...")
+        scores = run_screener()
+        if not scores.empty:
+            top = scores.sort_values("overall_score", ascending=False).head(10)
+            print("\nTop 10 by overall score:")
+            print(top[["quality_score", "value_score", "momentum_score",
+                       "sentiment_score", "risk_score", "overall_score"]].to_string())
+        else:
+            print("No data available to screen.")
+    elif args.candidates:
+        print("Selecting candidates...")
+        result = select_candidates()
+        if not result.empty:
+            print(f"\nSelected {len(result)} candidates:")
+            print(result[["ticker", "sector", "overall_score"]].to_string(index=False))
+        else:
+            print("No candidates selected (run --screen first).")
+    elif args.events:
+        tickers = _load_watchlist()
+        if not tickers:
+            print("Watchlist is empty.")
+            return
+        print(f"Detecting events for: {', '.join(tickers)}")
+        results = detect_events_batch(tickers)
+        if results:
+            for ticker, events in results.items():
+                print(f"\n  {ticker}:")
+                for ev in events:
+                    print(f"    [{ev['event_type']}] {ev['details']}")
+        else:
+            print("No events detected.")
+    elif args.portfolio:
+        print("Running portfolio engine...")
+        results = run_portfolio_engine()
+        if results:
+            print(f"\n{'Ticker':<8} {'Action':<6} {'Pos%':<7} {'Shares':<8} {'Stop':<9} Reason")
+            print("-" * 70)
+            for r in sorted(results, key=lambda x: x["action"]):
+                stop = f"${r['stop_loss']:.2f}" if r.get("stop_loss") else "\u2014"
+                pct = f"{r['position_pct']:.1f}%" if r.get("position_pct") else "\u2014"
+                shares = f"{r['shares']:.0f}" if r.get("shares") else "\u2014"
+                print(f"{r['ticker']:<8} {r['action']:<6} {pct:<7} {shares:<8} {stop:<9} {r.get('reason', '')}")
+        else:
+            print("No decisions generated.")
+    elif args.review:
+        print("Running portfolio review (LLM investment committee)...")
+        review = run_portfolio_review()
+        if review:
+            print(f"\n{review}")
+        else:
+            print("No review generated (run --portfolio first).")
     elif args.batch:
         tickers = _load_watchlist()
         if not tickers:

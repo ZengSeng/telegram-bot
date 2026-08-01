@@ -14,8 +14,20 @@ No manual step needed unless first-time setup or recovering from downtime.
 
 | Run (manual) | Impacts | What it does |
 |-----|---------|--------------|
-| `venv\Scripts\python -m data_eng --daily` | `data/market.duckdb` → all tables | Batch prices + news + targets + enriched + smart financials |
+| `venv\Scripts\python -m data_eng --daily` | `data/market.duckdb` → all tables | Batch prices + news + targets + enriched + smart financials + screener |
+| `venv\Scripts\python -m data_eng --daily-smart` | `data/market.duckdb` → all tables | Same as `--daily` but skips data that's still fresh (saves API calls) |
 | `venv\Scripts\python -m data_eng --batch` | `data/market.duckdb` → `daily_prices` | Prices only (quick incremental) |
+| `venv\Scripts\python -m data_eng --screen` | `data/market.duckdb` → `screener_scores` | Run quantitative screener, prints top 10 |
+
+## Universe (weekly or one-time)
+
+Scrapes Yahoo Finance sectors/industries to build a broad stock universe (~2700+ tickers).
+Stop the bot first (DuckDB needs exclusive access).
+
+| Run | Impacts | What it does |
+|-----|---------|--------------|
+| `venv\Scripts\python -m data_eng --universe` | `stock_universe` + `daily_prices` | Full scrape (all 4 groups) + price backfill. Long-running (~15 min) |
+| `venv\Scripts\python -m data_eng --universe-group 1` | `stock_universe` + `daily_prices` | One group only (stagger: 1=industrials, 2=financials, 3=tech, 4=healthcare) |
 
 ## On demand (Telegram)
 
@@ -37,9 +49,9 @@ No manual step needed unless first-time setup or recovering from downtime.
 ## Files reference
 
 | Path | What lives there |
-|------|-----------------|
-| `data/market.duckdb` | All market data (7 tables) |
-| `data/watchlist.json` | Watched tickers (drives `--batch`) |
+|------|------------------|
+| `data/market.duckdb` | All market data (9 tables) |
+| `data/watchlist.json` | Watched tickers (drives `--batch`, `--daily`) |
 | `data/trades.csv` | Logged trades |
 | `data/analysis_reports/` | Saved TradingAgents reports |
 | `data/voice_log.jsonl` | Voice/text log |

@@ -21,10 +21,10 @@ API_PAUSE = 1.5
 
 
 def ingest_prices(ticker: str, lookback_days: int = 365) -> int:
-    """Fetch daily OHLCV and upsert into daily_prices. Returns row count."""
+    """Fetch daily OHLCV + corporate actions and upsert into daily_prices. Returns row count."""
     conn = get_connection()
     tk = yf.Ticker(ticker)
-    df = tk.history(period=f"{lookback_days}d")
+    df = tk.history(period=f"{lookback_days}d", actions=True)
     if df.empty:
         log.warning("No price data for %s", ticker)
         conn.close()
@@ -35,6 +35,8 @@ def ingest_prices(ticker: str, lookback_days: int = 365) -> int:
 
     rows = []
     for idx, row in df.iterrows():
+        div = float(row.get("Dividends", 0) or 0)
+        split = float(row.get("Stock Splits", 0) or 0)
         rows.append((
             ticker,
             idx.date(),
@@ -43,12 +45,14 @@ def ingest_prices(ticker: str, lookback_days: int = 365) -> int:
             round(row["Low"], 2),
             round(row["Close"], 2),
             int(row["Volume"]),
+            div,
+            split,
         ))
 
     conn.executemany(
         """INSERT OR REPLACE INTO daily_prices
-           (ticker, date, open, high, low, close, volume)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+           (ticker, date, open, high, low, close, volume, dividends, stock_splits)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         rows,
     )
     conn.close()
@@ -657,6 +661,7 @@ def batch_ingest_prices(tickers: list[str], lookback_days: int = 3 * 365) -> int
             end=today.strftime("%Y-%m-%d"),
             interval="1d",
             auto_adjust=True,
+            actions=True,
             progress=False,
             group_by="ticker",
         )
@@ -684,13 +689,16 @@ def batch_ingest_prices(tickers: list[str], lookback_days: int = 3 * 365) -> int
             d = idx.date()
             if d < start_date:
                 continue
+            div = float(row.get("Dividends", 0) or 0)
+            split = float(row.get("Stock Splits", 0) or 0)
             rows.append((ticker, d, round(row["Open"], 2), round(row["High"], 2),
-                         round(row["Low"], 2), round(row["Close"], 2), int(row["Volume"])))
+                         round(row["Low"], 2), round(row["Close"], 2), int(row["Volume"]),
+                         div, split))
         if rows:
             conn.executemany(
                 """INSERT OR REPLACE INTO daily_prices
-                   (ticker, date, open, high, low, close, volume)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""", rows)
+                   (ticker, date, open, high, low, close, volume, dividends, stock_splits)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", rows)
             total_rows += len(rows)
     else:
         # Multi-ticker: columns are MultiIndex (ticker, field)
@@ -711,13 +719,16 @@ def batch_ingest_prices(tickers: list[str], lookback_days: int = 3 * 365) -> int
                     continue
                 if pd.isna(row.get("Close")):
                     continue
+                div = float(row.get("Dividends", 0) or 0)
+                split = float(row.get("Stock Splits", 0) or 0)
                 rows.append((ticker, d, round(row["Open"], 2), round(row["High"], 2),
-                             round(row["Low"], 2), round(row["Close"], 2), int(row["Volume"])))
+                             round(row["Low"], 2), round(row["Close"], 2), int(row["Volume"]),
+                             div, split))
             if rows:
                 conn.executemany(
                     """INSERT OR REPLACE INTO daily_prices
-                       (ticker, date, open, high, low, close, volume)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)""", rows)
+                       (ticker, date, open, high, low, close, volume, dividends, stock_splits)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", rows)
                 total_rows += len(rows)
 
     conn.close()
