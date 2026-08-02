@@ -14,21 +14,21 @@ No manual step needed unless first-time setup or recovering from downtime.
 
 | Run (manual) | Impacts | What it does |
 |-----|---------|--------------|
-| `venv\Scripts\python -m data_eng --daily` | `data/market.duckdb` → all tables | Batch prices + news + targets + enriched + smart financials + screener |
+| `venv\Scripts\python -m data_eng --daily` | `data/market.duckdb` → all tables | Universe batch prices + news + targets + enriched + screener + analysis + portfolio |
 | `venv\Scripts\python -m data_eng --daily-smart` | `data/market.duckdb` → all tables | Same as `--daily` but skips data that's still fresh (saves API calls) |
-| `venv\Scripts\python -m data_eng --batch` | `data/market.duckdb` → `daily_prices` | Prices only (quick incremental) |
+| `venv\Scripts\python -m data_eng --batch` | `data/market.duckdb` → `daily_prices` | Prices only (quick incremental, watchlist) |
+| `venv\Scripts\python -m data_eng --batch-universe` | `data/market.duckdb` → `daily_prices` | Prices only (incremental, full universe ~2700) |
 | `venv\Scripts\python -m data_eng --screen` | `data/market.duckdb` → `screener_scores` | Run quantitative screener, prints top 10 |
 | `venv\Scripts\python -m data_eng --portfolio` | `data/market.duckdb` → `portfolio_decisions` | Deterministic rules engine (BUY/SELL/HOLD) |
 | `venv\Scripts\python -m data_eng --review` | `data/market.duckdb` → `portfolio_reviews` | LLM investment committee review (needs llama-server) |
 
-## Night pipeline (3 PM NZT)
+## Night pipeline (automated, 3 PM NZT)
 
-Refreshes the full universe, batch-downloads prices, then enriches fundamentals (rolling 100/day).
-Stop the bot first (DuckDB needs exclusive access).
+Runs automatically inside the bot at **3:00 PM NZT**. Refreshes the full universe, ingests watchlist financials (quarterly), then enriches fundamentals (rolling 100/day).
 
-| Run | Impacts | What it does |
+| Run (manual) | Impacts | What it does |
 |-----|---------|--------------|
-| `venv\Scripts\python -m data_eng --night` | `stock_universe` + `daily_prices` + `fundamentals` | Universe scrape + batch prices + enrich 100 tickers |
+| `venv\Scripts\python -m data_eng --night` | `stock_universe` + `financials` + `fundamentals` | Universe scrape + watchlist financials + enrich 100 tickers |
 | `venv\Scripts\python -m data_eng --night --limit 200` | same | Same but enriches 200 tickers per run |
 
 **Rolling enrich logic:** processes the oldest/never-loaded fundamentals first (Buy + Strong Buy rated + watchlist). After initial backlog clears (~19 days at N=100), steady-state is ~2.5 min/day refreshing the stalest 100.
@@ -44,7 +44,7 @@ Stop the bot first (DuckDB needs exclusive access).
 ## Universe (one-time or manual refresh)
 
 Scrapes Yahoo Finance sectors/industries to build a broad stock universe (~2700+ tickers).
-Stop the bot first (DuckDB needs exclusive access). Note: `--night` already includes universe refresh.
+Note: `--night` already includes universe refresh. `--daily` now uses universe tickers for batch prices.
 
 | Run | Impacts | What it does |
 |-----|---------|--------------|

@@ -60,6 +60,39 @@ def ingest_prices(ticker: str, lookback_days: int = 365) -> int:
     return len(rows)
 
 
+def _parse_news_article(art: dict) -> tuple[str, str, str, str, date] | None:
+    """Extract title, summary, publisher, url, pub_date from a news article dict.
+
+    Returns None if the article has no title.
+    """
+    content = art.get("content", art)
+    title = content.get("title", "")
+    if not title:
+        return None
+    summary = content.get("summary", "")
+    provider = content.get("provider", {})
+    publisher = provider.get("displayName", content.get("publisher", "Unknown"))
+    url_obj = content.get("canonicalUrl") or content.get("clickThroughUrl") or {}
+    url = url_obj.get("url", content.get("link", ""))
+
+    # Parse date
+    pub_date_str = content.get("pubDate", "")
+    ts = art.get("providerPublishTime")
+    pub_date = date.today()
+    if pub_date_str:
+        try:
+            pub_date = datetime.fromisoformat(pub_date_str.replace("Z", "+00:00")).date()
+        except ValueError:
+            pass
+    elif ts:
+        try:
+            pub_date = datetime.fromtimestamp(ts).date()
+        except (ValueError, OSError):
+            pass
+
+    return title, summary, publisher, url, pub_date
+
+
 def ingest_news(ticker: str) -> int:
     """Fetch recent news for a ticker. Returns article count."""
     conn = get_connection()
@@ -72,31 +105,10 @@ def ingest_news(ticker: str) -> int:
 
     rows = []
     for art in articles:
-        content = art.get("content", art)
-        title = content.get("title", "")
-        if not title:
+        parsed = _parse_news_article(art)
+        if parsed is None:
             continue
-        summary = content.get("summary", "")
-        provider = content.get("provider", {})
-        publisher = provider.get("displayName", content.get("publisher", "Unknown"))
-        url_obj = content.get("canonicalUrl") or content.get("clickThroughUrl") or {}
-        url = url_obj.get("url", content.get("link", ""))
-
-        # Parse date
-        pub_date_str = content.get("pubDate", "")
-        ts = art.get("providerPublishTime")
-        pub_date = date.today()
-        if pub_date_str:
-            try:
-                pub_date = datetime.fromisoformat(pub_date_str.replace("Z", "+00:00")).date()
-            except ValueError:
-                pass
-        elif ts:
-            try:
-                pub_date = datetime.fromtimestamp(ts).date()
-            except (ValueError, OSError):
-                pass
-
+        title, summary, publisher, url, pub_date = parsed
         rows.append((ticker, pub_date, title, summary, publisher, url))
 
     conn.executemany(
@@ -122,32 +134,13 @@ def ingest_global_news() -> int:
             search = yf.Search(query=query, news_count=15, enable_fuzzy_query=True)
             if search.news:
                 for art in search.news:
-                    content = art.get("content", art)
-                    title = content.get("title", "")
-                    if not title or title in seen_titles:
+                    parsed = _parse_news_article(art)
+                    if parsed is None:
+                        continue
+                    title, summary, publisher, url, pub_date = parsed
+                    if title in seen_titles:
                         continue
                     seen_titles.add(title)
-
-                    summary = content.get("summary", "")
-                    provider = content.get("provider", {})
-                    publisher = provider.get("displayName", content.get("publisher", "Unknown"))
-                    url_obj = content.get("canonicalUrl") or content.get("clickThroughUrl") or {}
-                    url = url_obj.get("url", content.get("link", ""))
-
-                    pub_date_str = content.get("pubDate", "")
-                    ts = art.get("providerPublishTime")
-                    pub_date = date.today()
-                    if pub_date_str:
-                        try:
-                            pub_date = datetime.fromisoformat(pub_date_str.replace("Z", "+00:00")).date()
-                        except ValueError:
-                            pass
-                    elif ts:
-                        try:
-                            pub_date = datetime.fromtimestamp(ts).date()
-                        except (ValueError, OSError):
-                            pass
-
                     rows.append((pub_date, title, summary, publisher, url))
         except Exception as e:
             log.warning("Global news query '%s' failed: %s", query, e)
@@ -324,7 +317,7 @@ def ingest_analyst_targets(ticker: str) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Yahoo AI summary scraper
+# Yahoo Finance overview (AI summary scraper)
 # ---------------------------------------------------------------------------
 
 def _fetch_yahoo_summary(symbol: str) -> str | None:
@@ -343,6 +336,22 @@ def _fetch_yahoo_summary(symbol: str) -> str | None:
     if el:
         return el.get_text(strip=True)
     return None
+
+
+def ingest_yfinance_overview(ticker: str) -> bool:
+    """Scrape Yahoo Finance AI overview and store in yfinance_overview table."""
+    log.info("Fetching yfinance overview for %s ...", ticker)
+    overview = _fetch_yahoo_summary(ticker)
+    time.sleep(2 + random.random() * 3)  # rate-limit for web scrape
+
+    conn = get_connection()
+    conn.execute(
+        "INSERT OR REPLACE INTO yfinance_overview (ticker, date_fetched, overview) VALUES (?, ?, ?)",
+        [ticker, date.today(), overview],
+    )
+    conn.close()
+    log.info("yfinance overview for %s: %s", ticker, "ok" if overview else "empty")
+    return overview is not None
 
 
 # ---------------------------------------------------------------------------
@@ -453,7 +462,7 @@ def _fetch_enrichment(ticker: str) -> dict:
 # Technical indicators (computed from daily_prices in DuckDB)
 # ---------------------------------------------------------------------------
 
-def _compute_technicals(ticker: str) -> dict:
+def compute_technicals(ticker: str) -> dict:
     """Compute technical indicators from stored daily_prices. Returns latest snapshot."""
     import ta as ta_lib
 
@@ -564,33 +573,100 @@ def _to_native(val):
 
 
 # ---------------------------------------------------------------------------
+# Technical indicators: store & batch ingest
+# ---------------------------------------------------------------------------
+
+def store_technicals(ticker: str, indicators: dict) -> None:
+    """Store technical indicators into the technicals table."""
+    row_data = {k: _to_native(v) for k, v in indicators.items()}
+    columns = ["ticker", "date_fetched"] + list(row_data.keys())
+    placeholders = ", ".join(["?"] * len(columns))
+    col_str = ", ".join(columns)
+    values = [ticker, date.today()] + list(row_data.values())
+
+    conn = get_connection()
+    conn.execute(
+        f"INSERT OR REPLACE INTO technicals ({col_str}) VALUES ({placeholders})",
+        values,
+    )
+    conn.close()
+
+
+def batch_ingest_technicals(tickers: list[str] | None = None) -> int:
+    """Compute and store technical indicators for tickers with sufficient price data.
+
+    If tickers is None, computes for all tickers in daily_prices with >= 30 rows.
+    Skips tickers that already have today's technicals.
+    Returns number of tickers processed.
+    """
+    conn = get_connection()
+    today = date.today()
+
+    if tickers:
+        placeholders = ", ".join("?" for _ in tickers)
+        eligible = conn.execute(
+            f"""SELECT ticker, COUNT(*) as cnt FROM daily_prices
+                WHERE ticker IN ({placeholders})
+                GROUP BY ticker HAVING cnt >= 30""",
+            tickers,
+        ).fetchall()
+    else:
+        eligible = conn.execute(
+            """SELECT ticker, COUNT(*) as cnt FROM daily_prices
+               GROUP BY ticker HAVING cnt >= 30"""
+        ).fetchall()
+    conn.close()
+
+    eligible_tickers = [r[0] for r in eligible]
+    log.info("Technicals: %d tickers with sufficient price data", len(eligible_tickers))
+
+    # Skip tickers already done today
+    conn = get_connection()
+    done_placeholders = ", ".join("?" for _ in eligible_tickers) if eligible_tickers else "''"
+    if eligible_tickers:
+        done = conn.execute(
+            f"""SELECT DISTINCT ticker FROM technicals
+                WHERE date_fetched = ? AND ticker IN ({done_placeholders})""",
+            [today] + eligible_tickers,
+        ).fetchall()
+    else:
+        done = []
+    conn.close()
+    done_set = {r[0] for r in done}
+
+    to_process = [t for t in eligible_tickers if t not in done_set]
+    log.info("Technicals: %d to process (%d already done today)",
+             len(to_process), len(done_set))
+
+    count = 0
+    for i, ticker in enumerate(to_process, 1):
+        try:
+            indicators = compute_technicals(ticker)
+            if indicators:
+                store_technicals(ticker, indicators)
+                count += 1
+            if i % 100 == 0:
+                log.info("Technicals: progress %d/%d (%d ok)", i, len(to_process), count)
+        except Exception as e:
+            log.warning("Technicals: failed for %s: %s", ticker, e)
+
+    log.info("Technicals: complete — %d/%d processed", count, len(to_process))
+    return count
+
+
+# ---------------------------------------------------------------------------
 # Combined enrichment ingestor
 # ---------------------------------------------------------------------------
 
 def ingest_enriched(ticker: str) -> bool:
-    """Fetch yahoo summary + growth + targets + recs + technicals → ticker_enriched table."""
+    """Fetch growth + targets + recs → ticker_enriched table."""
     log.info("Enriching %s ...", ticker)
 
-    # 1. Yahoo AI summary (web scrape)
-    yahoo_summary = _fetch_yahoo_summary(ticker)
-    time.sleep(2 + random.random() * 3)  # rate-limit for web scrape
-
-    # 2. yfinance enrichment
     enrichment = _fetch_enrichment(ticker)
     time.sleep(API_PAUSE)
 
-    # 3. Technical indicators (computed locally from DuckDB prices)
-    technicals = _compute_technicals(ticker)
+    row_data = {k: _to_native(v) for k, v in enrichment.items()}
 
-    # Merge all
-    row_data = {"yahoo_summary": yahoo_summary}
-    row_data.update(enrichment)
-    row_data.update(technicals)
-
-    # Sanitize numpy types → native Python for DuckDB
-    row_data = {k: _to_native(v) for k, v in row_data.items()}
-
-    # Build INSERT
     columns = ["ticker", "date_fetched"] + list(row_data.keys())
     placeholders = ", ".join(["?"] * len(columns))
     col_str = ", ".join(columns)
@@ -602,8 +678,7 @@ def ingest_enriched(ticker: str) -> bool:
         values,
     )
     conn.close()
-    log.info("Enriched %s (summary=%s, technicals=%d indicators)",
-             ticker, "yes" if yahoo_summary else "no", len(technicals))
+    log.info("Enriched %s", ticker)
     return True
 
 
@@ -770,6 +845,11 @@ def ingest_all(ticker: str) -> None:
     ingest_prices(ticker)
     time.sleep(API_PAUSE)
 
+    # Technical indicators (local computation from price data)
+    indicators = compute_technicals(ticker)
+    if indicators:
+        store_technicals(ticker, indicators)
+
     ingest_news(ticker)
     time.sleep(API_PAUSE)
 
@@ -783,6 +863,9 @@ def ingest_all(ticker: str) -> None:
     time.sleep(API_PAUSE)
 
     ingest_enriched(ticker)
+    time.sleep(API_PAUSE)
+
+    ingest_yfinance_overview(ticker)
     time.sleep(API_PAUSE)
 
     ingest_global_news()

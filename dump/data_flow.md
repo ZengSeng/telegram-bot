@@ -6,45 +6,40 @@ Mermaid diagrams illustrating the daily and nightly pipeline data flows.
 
 ### 1. Daily Pipeline (`--daily` / `--daily-smart`) — 8:00 AM NZT
 
-**Tickers:** `data/watchlist.json` for steps ①–⑩; step ⑬ analyzes candidates + watchlist (event-gated)
+**Tickers:** Step ① uses full `stock_universe`; steps ②–④ use `data/watchlist.json`; step ⑧ analyzes candidates + watchlist (event-gated)
 
 ```mermaid
 flowchart LR
-    WL["📋 watchlist.json"]
-
-    subgraph ROW1["Per-ticker loop (steps ②–⑥)"]
+    subgraph ROW1["Per-ticker loop (steps ②–④)"]
         direction LR
-        S1["① Batch Prices\n─── daily_prices ───"]
+        S1["① Batch Prices (universe)\n─── daily_prices ───\n~2700 tickers, incremental"]
         S2["② News\n─── news ───"]
         S3["③ Analyst Targets\n─── analyst_targets ───"]
         S4["④ Enriched\n─── ticker_enriched ───"]
-        S5["⑤ Fundamentals\n─── fundamentals ───"]
-        S1 --> S2 --> S3 --> S4 --> S5
+        S1 --> S2 --> S3 --> S4
     end
 
     subgraph ROW2[" "]
         direction LR
-        S6["⑥ Financials\n─── financials ───"]
-        S7["⑦ Global News\n─── global_news ───"]
-        S8["⑧ Google Finance\n─── gfinance_overview ───"]
-        S9["⑨ AI Summaries\n─── news_summaries ───"]
-        S10["⑩ Rolling Enrich\n─── fundamentals ───\n100 universe tickers"]
-        S6 --> S7 --> S8 --> S9 --> S10
+        S5["⑤ Global News\n─── global_news ───"]
+        S6["⑥ Google Finance\n─── gfinance_overview ───"]
+        S6b["⑥b Yahoo Finance\n─── yfinance_overview ───"]
+        S7["⑦ AI Summaries\n─── news_summaries ───"]
+        S5 --> S6 --> S6b --> S7
     end
 
     subgraph ROW3[" "]
         direction LR
-        S11["⑪ Screener\n─── screener_scores ───"]
-        S12["⑫ Candidates\n─── candidates ───"]
-        S13["⑬ TradingAgents\n─── trading_agent_decisions ───\nevent-gated, candidates+watchlist"]
-        S14["⑭ Portfolio Engine\n─── portfolio_decisions ───"]
-        S15["⑮ LLM Review\n─── portfolio_reviews ───"]
-        S11 --> S12 --> S13 --> S14 --> S15
+        S8["⑧ Screener\n─── screener_scores ───"]
+        S9["⑨ Candidates\n─── candidates ───"]
+        S10["⑩ TradingAgents\n─── trading_agent_decisions ───\nevent-gated, candidates+watchlist"]
+        S11["⑪ Portfolio Engine\n─── portfolio_decisions ───"]
+        S12["⑫ LLM Review\n─── portfolio_reviews ───"]
+        S8 --> S9 --> S10 --> S11 --> S12
     end
 
-    WL --> S1
-    S5 --> S6
-    S10 --> S11
+    S4 --> S5
+    S7 --> S8
 ```
 
 ### Smart Scheduling Staleness Thresholds
@@ -54,21 +49,20 @@ flowchart LR
 | `news` | `date` | 1 day | Changes daily |
 | `ticker_enriched` | `date_fetched` | 3 days | Slow-changing estimates |
 | `analyst_targets` | `date_fetched` | 3 days | Overlaps enrichment cycle |
-| `fundamentals` | `date_fetched` | 7 days | Company info snapshot |
-| `financials` | `report_date` | report_date + 80 days | Quarterly filing cycle |
+| `financials` | `report_date` | report_date + 80 days | Quarterly (night pipeline) |
 
 ---
 
-### 2. Night Pipeline (`--night`) — 3:00 PM NZT
+### 2. Night Pipeline (`--night`) — 3:00 PM NZT (automated in bot)
 
-**Tickers:** Full `stock_universe` (~2700+); enrich gated by rating (Buy/Strong Buy) + watchlist
+**Tickers:** Full `stock_universe` for scrape; watchlist for financials; enrich gated by rating (Buy/Strong Buy) + watchlist
 
 ```mermaid
 flowchart LR
-    subgraph NIGHT["🌙 Night Pipeline — 3:00 PM NZT"]
+    subgraph NIGHT["🌙 Night Pipeline — 3:00 PM NZT (in-bot)"]
         direction LR
         N1["① Universe Scrape\n─── stock_universe ───\n\nYahoo Finance sectors\n4 groups, ~2700 tickers\nPK: (ticker, date_added)"]
-        N2["② Batch Prices\n─── daily_prices ───\n\nIncremental (5-day cap)\nnew tickers backfilled\nindividually"]
+        N2["② Watchlist Financials\n─── financials ───\n\n80-day cycle\nquarterly statements"]
         N3["③ Rolling Enrich\n─── fundamentals ───\n\n100 tickers/night\noldest first, ~2.5 min"]
         N1 --> N2 --> N3
     end
@@ -96,7 +90,7 @@ flowchart LR
         RP["data/analysis_reports/"]
     end
 
-    subgraph DUCKDB["data/market.duckdb (16 tables)"]
+    subgraph DUCKDB["data/market.duckdb (17 tables)"]
         direction TB
         T1[("daily_prices")]
         T2[("news")]
@@ -107,6 +101,7 @@ flowchart LR
         T7[("ticker_enriched")]
         T8[("news_summaries")]
         T9[("gfinance_overview")]
+        T9b[("yfinance_overview")]
         T10[("trading_agent_decisions")]
         T11[("screener_scores")]
         T12[("candidates")]
@@ -123,7 +118,7 @@ flowchart LR
     YF -->|"Quarterly statements (JSON)"| T5
     YF -->|"Consensus targets + upgrades"| T6
     YF -->|"Growth estimates + recommendations"| T7
-    YAHOO -->|"AI business summary"| T7
+    YAHOO -->|"AI business summary"| T9b
     GF -->|"Summary + bull/bear points"| T9
     LLM -->|"Per-ticker news digest"| T8
     TA -->|"Decision + trader parsing"| T10
@@ -143,43 +138,42 @@ Night builds **breadth** (2700+ tickers with prices + fundamentals). Daily build
 
 ```mermaid
 flowchart TD
-    subgraph NIGHT["🌙 Night Pipeline (3 PM)"]
+    subgraph NIGHT["🌙 Night Pipeline (3 PM, in-bot)"]
         direction TB
-        NP["daily_prices\n2700+ tickers\n(incremental)"]
-        NF["fundamentals\nrolling 100/day\n(Buy/Strong Buy)"]
         NU["stock_universe\nratings + sectors"]
+        NF["financials\nwatchlist\n(80-day cycle)"]
+        NE["fundamentals\nrolling 100/day\n(Buy/Strong Buy)"]
     end
 
     subgraph DAILY["☀️ Daily Pipeline (8 AM)"]
         direction TB
-        DP["daily_prices\nwatchlist\n(+ NZDUSD)"]
-        DF["fundamentals\nwatchlist\n(smart-scheduled)"]
-        DE["ticker_enriched\nnews, analysts\ngfinance, summaries"]
+        DP["daily_prices\nuniverse (~2700)\n(incremental)"]
+        DE["ticker_enriched\nnews, analysts\ngfinance"]
+        YO["yfinance_overview\nAI summary"]
     end
 
     subgraph CONVERGE["Convergence Point"]
         direction TB
-        SC["⑪ Screener\nscores ALL tickers\nwith fundamentals data"]
-        CA["⑫ Candidates\nsector-balanced top-N\ncorrelation-filtered"]
+        SC["⑧ Screener\nscores ALL tickers\nwith fundamentals data"]
+        CA["⑨ Candidates\nsector-balanced top-N\ncorrelation-filtered"]
     end
 
     subgraph ANALYSIS["Analysis Chain"]
         direction TB
-        TA["⑬ TradingAgents\nevent-gated\ncandidates + watchlist"]
-        PE["⑭ Portfolio Engine\nrules: 20% pos, 35% sector\n10% cash, stop loss"]
-        RV["⑮ LLM Review\ninvestment committee"]
+        TA["⑩ TradingAgents\nevent-gated\ncandidates + watchlist"]
+        PE["⑪ Portfolio Engine\nrules: 20% pos, 35% sector\n10% cash, stop loss"]
+        RV["⑫ LLM Review\ninvestment committee"]
     end
 
-    NP -->|"price history\n(momentum, volatility)"| SC
-    NF -->|"quality, value metrics\n(ROE, PE, margins)"| SC
-    NU -->|"sector + rating\nfor allocation"| CA
-    DP -->|"fresh prices"| SC
-    DF -->|"fresh fundamentals"| SC
-    DE -->|"sentiment, RSI\nearings trends"| SC
+    NU --> |"sector + rating\nfor allocation"| CA
+    NF --> |"quality, value metrics\n(ROE, PE, margins)"| SC
+    NE --> |"fundamentals refresh"| SC
+    DP --> |"price history\n(momentum, volatility)"| SC
+    DE --> |"sentiment, RSI\nearings trends"| SC
 
     SC --> CA
     CA --> TA
-    DE -->|"events gate"| TA
+    DE --> |"events gate"| TA
     TA --> PE
     SC --> PE
     PE --> RV
@@ -208,6 +202,7 @@ flowchart LR
         AT[("analyst_targets")]
         TE[("ticker_enriched")]
         GO[("gfinance_overview")]
+        YO[("yfinance_overview")]
         NS[("news_summaries")]
     end
 
@@ -266,46 +261,46 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    subgraph NIGHT["🌙 Night Pipeline (3 PM NZT)"]
+    subgraph NIGHT["🌙 Night Pipeline (3 PM NZT, in-bot)"]
         direction TB
         N1["1. Universe scrape\n(all 4 sector groups)"]
-        N2["2. Batch prices\n(~2700 tickers)"]
+        N2["2. Watchlist financials\n(80-day quarterly cycle)"]
         N3["3. Enrich fundamentals\n(rolling 100/day)"]
         N1 --> N2 --> N3
     end
 
     subgraph DAILY["☀️ Daily Pipeline (8 AM NZT)"]
         direction TB
-        D1["1. Batch prices\n(watchlist only)"]
-        D2["2. Per-ticker:\nnews, analysts, enriched,\nfundamentals, financials"]
+        D1["1. Batch prices\n(universe ~2700)"]
+        D2["2. Per-ticker:\nnews, analysts, enriched"]
         D3["3. Global news"]
         D4["4. Google Finance overviews"]
+        D4b["4b. Yahoo Finance overviews"]
         D5["5. AI news summaries (LLM)"]
-        D6["5b. Rolling enrich (100)"]
-        D7["6. Quantitative screener"]
-        D8["7. Candidate selection"]
-        D9["8. TradingAgents analysis\n(event-gated)"]
-        D10["9. Portfolio engine"]
-        D11["10. LLM portfolio review"]
-        D1 --> D2 --> D3 --> D4 --> D5 --> D6 --> D7 --> D8 --> D9 --> D10 --> D11
+        D6["6. Quantitative screener"]
+        D7["7. Candidate selection"]
+        D8["8. TradingAgents analysis\n(event-gated)"]
+        D9["9. Portfolio engine"]
+        D10["10. LLM portfolio review"]
+        D1 --> D2 --> D3 --> D4 --> D4b --> D5 --> D6 --> D7 --> D8 --> D9 --> D10
     end
 
     subgraph SHARED["Shared DuckDB Tables"]
         direction TB
         T_DP[("daily_prices")]
         T_FU[("fundamentals")]
+        T_FI[("financials")]
         T_TE[("ticker_enriched")]
         T_SC[("screener_scores")]
         T_PD[("portfolio_decisions")]
     end
 
-    N2 --> T_DP
+    N2 --> T_FI
     N3 --> T_FU
     D1 --> T_DP
-    D2 --> T_FU
     D2 --> T_TE
-    D7 --> T_SC
-    D10 --> T_PD
+    D6 --> T_SC
+    D9 --> T_PD
 
     style NIGHT fill:#1a1a2e,stroke:#e94560,color:#fff
     style DAILY fill:#16213e,stroke:#0f3460,color:#fff
@@ -316,7 +311,7 @@ flowchart LR
 
 ## 6. Rolling Enrichment Detail
 
-How the 100/day limit works across nightly and daily runs.
+How the 100/day limit works in the nightly pipeline.
 
 ```mermaid
 flowchart TD

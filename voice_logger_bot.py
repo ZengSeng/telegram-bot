@@ -15,6 +15,8 @@ from stock_bot.config import (
     BOT_TOKEN,
     DEFAULT_SYSTEM_PROMPT,
     LOCAL_TIMEZONE,
+    NIGHT_PIPELINE_HOUR,
+    NIGHT_PIPELINE_MINUTE,
     PIPELINE_HOUR,
     PIPELINE_MINUTE,
     SUMMARY_HOUR,
@@ -57,6 +59,10 @@ def main() -> None:
     # Schedule daily portfolio summary (local time)
     summary_time = dt.time(hour=SUMMARY_HOUR, minute=SUMMARY_MINUTE, tzinfo=tz)
     app.job_queue.run_daily(handlers.send_daily_summary, time=summary_time)
+
+    # Schedule night pipeline (3 PM NZT) — universe + financials + enrich
+    night_time = dt.time(hour=NIGHT_PIPELINE_HOUR, minute=NIGHT_PIPELINE_MINUTE, tzinfo=tz)
+    app.job_queue.run_daily(handlers.run_night_pipeline_job, time=night_time)
 
     log.info("Bot starting...")
     app.run_polling()

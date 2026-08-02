@@ -46,6 +46,8 @@ SUMMARY_HOUR = 9
 SUMMARY_MINUTE = 30
 PIPELINE_HOUR = 8
 PIPELINE_MINUTE = 0
+NIGHT_PIPELINE_HOUR = 15
+NIGHT_PIPELINE_MINUTE = 0
 LOCAL_TIMEZONE = "Pacific/Auckland"  # New Zealand
 
 # ---------------------------------------------------------------------------

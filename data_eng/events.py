@@ -69,11 +69,11 @@ def _check_news(ticker: str, since: date) -> dict | None:
 
 
 def _check_technical_change(ticker: str) -> dict | None:
-    """Compare trade_signal in latest vs previous ticker_enriched row."""
+    """Compare trade_signal in latest vs previous technicals row."""
     conn = get_connection()
     rows = conn.execute(
         """
-        SELECT date_fetched, trade_signal FROM ticker_enriched
+        SELECT date_fetched, trade_signal FROM technicals
         WHERE ticker = ?
         ORDER BY date_fetched DESC
         LIMIT 2

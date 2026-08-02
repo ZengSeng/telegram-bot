@@ -109,6 +109,27 @@ def _fetch_latest_enriched(tickers: list[str]) -> pd.DataFrame:
     return df.set_index("ticker") if not df.empty else pd.DataFrame()
 
 
+def _fetch_latest_technicals(tickers: list[str]) -> pd.DataFrame:
+    """Get the most recent technicals row per ticker."""
+    conn = get_connection()
+    placeholders = ", ".join("?" for _ in tickers)
+    df = conn.execute(
+        f"""
+        SELECT t.*
+        FROM technicals t
+        INNER JOIN (
+            SELECT ticker, MAX(date_fetched) AS max_date
+            FROM technicals
+            WHERE ticker IN ({placeholders})
+            GROUP BY ticker
+        ) latest ON t.ticker = latest.ticker AND t.date_fetched = latest.max_date
+        """,
+        tickers,
+    ).fetchdf()
+    conn.close()
+    return df.set_index("ticker") if not df.empty else pd.DataFrame()
+
+
 def _fetch_price_metrics(tickers: list[str]) -> pd.DataFrame:
     """Compute 3M/6M returns, volatility, and above-200MA from daily_prices."""
     conn = get_connection()
@@ -167,6 +188,7 @@ def compute_raw_metrics(tickers: list[str]) -> pd.DataFrame:
     """
     fund = _fetch_latest_fundamentals(tickers)
     enr = _fetch_latest_enriched(tickers)
+    tech = _fetch_latest_technicals(tickers)
     price = _fetch_price_metrics(tickers)
 
     if fund.empty:
@@ -213,8 +235,8 @@ def compute_raw_metrics(tickers: list[str]) -> pd.DataFrame:
         metrics["return_6m"] = np.nan
         metrics["volatility_63d"] = np.nan
 
-    if not enr.empty:
-        metrics["rsi_14"] = enr.reindex(metrics.index).get("rsi_14")
+    if not tech.empty:
+        metrics["rsi_14"] = tech.reindex(metrics.index).get("rsi_14")
     else:
         metrics["rsi_14"] = np.nan
 

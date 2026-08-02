@@ -8,14 +8,14 @@ from .db import get_connection
 from .ingest import (
     API_PAUSE,
     batch_ingest_prices,
-    ingest_analyst_targets,
-    ingest_enriched,
+    batch_ingest_technicals,
     ingest_financials,
-    ingest_fundamentals,
     ingest_global_news,
     ingest_news,
+    ingest_yfinance_overview,
 )
 from .analysis_ingest import ingest_analysis_decision
+from .enrich import bulk_analyst_targets, bulk_enriched, run_enrich
 from .gfinance import ingest_gfinance_overview
 from .summarize import generate_news_summaries
 
@@ -29,6 +29,11 @@ NEWS_STALE_DAYS = 1
 ENRICHED_STALE_DAYS = 3
 ANALYST_STALE_DAYS = 3
 FUNDAMENTALS_STALE_DAYS = 7
+
+# Night pipeline bulk limits (tickers per run)
+NIGHT_FUNDAMENTALS_LIMIT = 300
+NIGHT_ANALYST_LIMIT = 500
+NIGHT_ENRICHED_LIMIT = 500
 
 
 def _is_stale(table: str, date_col: str, ticker: str, max_age_days: int) -> bool:
@@ -76,26 +81,18 @@ def should_ingest_financials(ticker: str) -> bool:
     - No financials exist for the ticker, OR
     - The latest report_date + 80 days <= today (new quarter likely reported)
     """
-    conn = get_connection()
-    row = conn.execute(
-        "SELECT MAX(report_date) FROM financials WHERE ticker = ?", [ticker]
-    ).fetchone()
-    conn.close()
-
-    if not row or not row[0]:
-        return True
-
-    last_report = row[0] if isinstance(row[0], date) else row[0].date()
-    projected_next = last_report + timedelta(days=FINANCIALS_REFRESH_DAYS)
-    return date.today() >= projected_next
+    return _is_stale("financials", "report_date", ticker, FINANCIALS_REFRESH_DAYS)
 
 
 def run_daily_pipeline(tickers: list[str], use_smart_scheduling: bool = False) -> None:
     """Run the full daily data refresh for all watchlist tickers.
 
-    1. Batch-download prices (incremental) for tickers + NZDUSD forex
-    2. Per-ticker: news, analyst targets, enriched, financials (smart-scheduled)
-    3. Global news
+    1. Batch-download prices (incremental) for full universe + NZDUSD forex
+    2. Per-ticker: news, analyst targets, enriched (smart-scheduled)
+    3. Global news, Google Finance, AI summaries
+    4. Screener → candidates → TradingAgents → portfolio engine → review
+
+    Fundamentals and financials are handled by the night pipeline (enrich).
 
     When use_smart_scheduling=True, each per-ticker ingestion is gated by a
     staleness check to avoid unnecessary API calls.
@@ -106,13 +103,22 @@ def run_daily_pipeline(tickers: list[str], use_smart_scheduling: bool = False) -
 
     log.info("=== Daily pipeline started for %d tickers ===", len(tickers))
 
-    # 1. Batch prices (includes NZDUSD=X for forex rate)
-    all_price_tickers = list(tickers)
+    # 1. Batch prices — full universe (not just watchlist) + NZDUSD forex
+    from .universe import UniverseScraper
+
+    scraper = UniverseScraper()
+    universe_tickers = scraper.get_universe_tickers()
+    all_price_tickers = list(dict.fromkeys(universe_tickers))  # dedupe, preserve order
     if "NZDUSD=X" not in all_price_tickers:
         all_price_tickers.append("NZDUSD=X")
+    log.info("Daily: batch prices for %d universe tickers", len(all_price_tickers))
     batch_ingest_prices(all_price_tickers)
 
-    # 2. Per-ticker enrichment loop
+    # 1b. Technical indicators (computed locally from daily_prices)
+    log.info("Daily: computing technical indicators...")
+    batch_ingest_technicals(all_price_tickers)
+
+    # 2. Per-ticker: news only (smart-scheduled)
     for ticker in tickers:
         log.info("Pipeline: processing %s", ticker)
 
@@ -120,31 +126,6 @@ def run_daily_pipeline(tickers: list[str], use_smart_scheduling: bool = False) -
             ingest_news(ticker)
         else:
             log.info("Pipeline: news still fresh for %s, skipping", ticker)
-        time.sleep(API_PAUSE)
-
-        if not use_smart_scheduling or should_ingest_analyst(ticker):
-            ingest_analyst_targets(ticker)
-        else:
-            log.info("Pipeline: analyst targets still fresh for %s, skipping", ticker)
-        time.sleep(API_PAUSE)
-
-        if not use_smart_scheduling or should_ingest_enriched(ticker):
-            ingest_enriched(ticker)
-        else:
-            log.info("Pipeline: enriched still fresh for %s, skipping", ticker)
-        time.sleep(API_PAUSE)
-
-        if not use_smart_scheduling or should_ingest_fundamentals(ticker):
-            ingest_fundamentals(ticker)
-        else:
-            log.info("Pipeline: fundamentals still fresh for %s, skipping", ticker)
-        time.sleep(API_PAUSE)
-
-        if should_ingest_financials(ticker):
-            log.info("Pipeline: financials due for %s", ticker)
-            ingest_financials(ticker)
-        else:
-            log.info("Pipeline: financials still fresh for %s, skipping", ticker)
         time.sleep(API_PAUSE)
 
     # 3. Global news
@@ -158,6 +139,14 @@ def run_daily_pipeline(tickers: list[str], use_smart_scheduling: bool = False) -
         except Exception as e:
             log.warning("Pipeline: Google Finance scrape failed for %s (non-fatal): %s", ticker, e)
 
+    # 4b. Yahoo Finance AI overview (web scrape)
+    log.info("Pipeline: fetching Yahoo Finance overviews...")
+    for ticker in tickers:
+        try:
+            ingest_yfinance_overview(ticker)
+        except Exception as e:
+            log.warning("Pipeline: Yahoo Finance overview failed for %s (non-fatal): %s", ticker, e)
+
     # 5. AI news summaries (runs last, uses local LLM)
     log.info("Pipeline: generating AI news summaries...")
     try:
@@ -165,16 +154,6 @@ def run_daily_pipeline(tickers: list[str], use_smart_scheduling: bool = False) -
         log.info("Pipeline: summarized %d ticker(s)", len(results))
     except Exception as e:
         log.warning("Pipeline: news summarization failed (non-fatal): %s", e)
-
-    # 5b. Bulk fundamentals enrichment (rolling N/day for universe)
-    try:
-        from .enrich import run_enrich
-
-        log.info("Pipeline: enriching universe fundamentals (rolling batch)...")
-        enriched_count = run_enrich(limit=100)
-        log.info("Pipeline: enriched %d tickers", enriched_count)
-    except Exception as e:
-        log.warning("Pipeline: enrichment failed (non-fatal): %s", e)
 
     # 6. Quantitative screener (percentile-rank scoring)
     log.info("Pipeline: running quantitative screener...")
@@ -301,16 +280,22 @@ def run_universe_group(group_id: int) -> None:
 # ---------------------------------------------------------------------------
 
 
-def run_night_pipeline(enrich_limit: int = 100) -> None:
-    """Night pipeline: refresh universe, batch prices, then enrich fundamentals.
+def run_night_pipeline(
+    tickers: list[str] | None = None,
+    fundamentals_limit: int = NIGHT_FUNDAMENTALS_LIMIT,
+    analyst_limit: int = NIGHT_ANALYST_LIMIT,
+    enriched_limit: int = NIGHT_ENRICHED_LIMIT,
+) -> None:
+    """Night pipeline: universe refresh + bulk enrichment.
 
     Designed to run at 3 PM NZT (after US pre-market data settles).
     1. Scrape universe (updates ratings, discovers new tickers)
-    2. Batch-ingest prices for all universe tickers
-    3. Enrich fundamentals (rolling N/day)
+    2. Ingest financials for watchlist tickers (80-day cycle)
+    3. Bulk-ingest fundamentals (rolling N/night, watchlist prioritized)
+    4. Bulk-ingest analyst targets (rolling N/night, watchlist prioritized)
+    5. Bulk-ingest ticker_enriched (rolling N/night, watchlist prioritized)
     """
     from .universe import UniverseScraper
-    from .enrich import run_enrich
 
     log.info("=== Night pipeline started ===")
     t0 = time.time()
@@ -321,15 +306,40 @@ def run_night_pipeline(enrich_limit: int = 100) -> None:
     log.info("Night: universe scrape done — %d tickers in %.1fs",
              len(all_tickers), time.time() - t0)
 
-    # 2. Batch prices for full universe
-    if all_tickers:
+    # 2. Financials for watchlist tickers (quarterly, 80-day cycle)
+    watchlist = tickers or []
+    if watchlist:
         t1 = time.time()
-        batch_ingest_prices(list(all_tickers))
-        log.info("Night: price ingest done in %.1fs", time.time() - t1)
+        fin_count = 0
+        for ticker in watchlist:
+            if should_ingest_financials(ticker):
+                log.info("Night: financials due for %s", ticker)
+                try:
+                    ingest_financials(ticker)
+                    fin_count += 1
+                except Exception as e:
+                    log.warning("Night: financials failed for %s (non-fatal): %s", ticker, e)
+                time.sleep(API_PAUSE)
+            else:
+                log.info("Night: financials still fresh for %s, skipping", ticker)
+        log.info("Night: financials done — %d refreshed in %.1fs",
+                 fin_count, time.time() - t1)
 
-    # 3. Enrich fundamentals (rolling batch)
+    # 3. Bulk-ingest fundamentals (rolling batch, watchlist prioritized)
     t2 = time.time()
-    enriched = run_enrich(limit=enrich_limit)
-    log.info("Night: enriched %d tickers in %.1fs", enriched, time.time() - t2)
+    enriched = run_enrich(limit=fundamentals_limit)
+    log.info("Night: fundamentals enriched %d tickers in %.1fs", enriched, time.time() - t2)
+
+    # 4. Bulk-ingest analyst targets (rolling batch, watchlist prioritized)
+    t3 = time.time()
+    analyst_count = bulk_analyst_targets(watchlist, limit=analyst_limit)
+    log.info("Night: analyst targets done — %d tickers in %.1fs",
+             analyst_count, time.time() - t3)
+
+    # 5. Bulk-ingest ticker_enriched (rolling batch, watchlist prioritized)
+    t4 = time.time()
+    enriched_count = bulk_enriched(watchlist, limit=enriched_limit)
+    log.info("Night: ticker_enriched done — %d tickers in %.1fs",
+             enriched_count, time.time() - t4)
 
     log.info("=== Night pipeline complete (%.1fs total) ===", time.time() - t0)

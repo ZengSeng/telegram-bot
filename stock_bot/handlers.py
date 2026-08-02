@@ -198,6 +198,19 @@ async def run_pipeline_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     log.info("Pipeline job finished.")
 
 
+async def run_night_pipeline_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Scheduled night pipeline — universe + financials + analyst targets + enriched."""
+    import asyncio
+
+    from data_eng.pipeline import run_night_pipeline
+
+    watchlist = load_watchlist()
+    log.info("Night pipeline job started.")
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, run_night_pipeline, watchlist)
+    log.info("Night pipeline job finished.")
+
+
 # ---------------------------------------------------------------------------
 # Trading agent commands
 # ---------------------------------------------------------------------------

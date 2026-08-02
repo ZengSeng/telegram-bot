@@ -123,12 +123,16 @@ CREATE TABLE IF NOT EXISTS gfinance_overview (
     PRIMARY KEY (ticker, date_fetched)
 );
 
+CREATE TABLE IF NOT EXISTS yfinance_overview (
+    ticker          VARCHAR NOT NULL,
+    date_fetched    DATE NOT NULL,
+    overview        VARCHAR,
+    PRIMARY KEY (ticker, date_fetched)
+);
+
 CREATE TABLE IF NOT EXISTS ticker_enriched (
     ticker              VARCHAR NOT NULL,
     date_fetched        DATE NOT NULL,
-
-    -- Yahoo AI summary
-    yahoo_summary       VARCHAR,
 
     -- Growth estimates (from yfinance growth_estimates)
     stock_trend_0q      DOUBLE,
@@ -157,19 +161,34 @@ CREATE TABLE IF NOT EXISTS ticker_enriched (
     rec_sell            INTEGER,
     rec_strong_sell     INTEGER,
 
-    -- Technical indicators (latest snapshot)
+    PRIMARY KEY (ticker, date_fetched)
+);
+
+CREATE TABLE IF NOT EXISTS technicals (
+    ticker              VARCHAR NOT NULL,
+    date_fetched        DATE NOT NULL,
+
+    -- Trend
     sma_20              DOUBLE,
     sma_50              DOUBLE,
     ema_12              DOUBLE,
     ema_26              DOUBLE,
+
+    -- MACD
     macd                DOUBLE,
     macd_signal         DOUBLE,
     macd_hist           DOUBLE,
+
+    -- RSI
     rsi_14              DOUBLE,
+
+    -- Bollinger Bands
     bb_upper            DOUBLE,
     bb_middle           DOUBLE,
     bb_lower            DOUBLE,
     bb_width            DOUBLE,
+
+    -- Volume
     volume_sma_20       DOUBLE,
     obv                 DOUBLE,
     volume_ratio        DOUBLE,

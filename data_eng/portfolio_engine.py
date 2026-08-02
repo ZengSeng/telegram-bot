@@ -13,6 +13,7 @@ Rules:
 
 import csv
 import logging
+import re
 from collections import defaultdict
 from datetime import date
 from pathlib import Path
@@ -52,7 +53,6 @@ def _load_holdings() -> dict[str, float]:
     sells: dict[str, list[dict]] = defaultdict(list)
 
     for row in rows:
-        import re
         stock = row.get("stock", "")
         # Extract ticker: "Name (TICKER | EXCHANGE)" or "Name | TICKER | EXCHANGE"
         m = re.search(r"\(([A-Z]+)", stock.upper())

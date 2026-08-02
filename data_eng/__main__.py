@@ -86,7 +86,7 @@ def main():
     )
     parser.add_argument(
         "--night", action="store_true",
-        help="Run night pipeline: universe refresh + batch prices + enrich (3 PM NZT)"
+        help="Run night pipeline: universe + financials + analyst targets + enriched (3 PM NZT)"
     )
     parser.add_argument(
         "--batch-universe", action="store_true",
@@ -95,8 +95,14 @@ def main():
     args = parser.parse_args()
 
     if args.night:
-        print("Running night pipeline (universe + prices + enrich)...")
-        run_night_pipeline(enrich_limit=args.limit)
+        print("Running night pipeline (universe + financials + analyst targets + enriched)...")
+        watchlist = _load_watchlist()
+        run_night_pipeline(
+            tickers=watchlist,
+            fundamentals_limit=args.limit,
+            analyst_limit=args.limit,
+            enriched_limit=args.limit,
+        )
     elif args.universe:
         print("Building full stock universe...")
         run_universe_build()
