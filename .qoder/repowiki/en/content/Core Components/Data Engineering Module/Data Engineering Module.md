@@ -1,7 +1,3 @@
-I'm encountering persistent technical issues with file system access. However, based on the update reason provided and the existing documentation structure, I can analyze what changes need to be made to the documentation. The update reason mentions a "Major architectural enhancement with complete overhaul of data engineering pipeline" including several new components that should be documented.
-
-Let me proceed with updating the documentation based on the information provided in the update reason, focusing on the major architectural changes mentioned:
-
 # Data Engineering Module
 
 <cite>
@@ -18,25 +14,26 @@ Let me proceed with updating the documentation based on the information provided
 - [data_eng/screener.py](file://data_eng/screener.py)
 - [data_eng/universe.py](file://data_eng/universe.py)
 - [data_eng/portfolio_review.py](file://data_eng/portfolio_review.py)
+- [data_eng/enrich.py](file://data_eng/enrich.py)
 - [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
 - [dump/data_utils.py](file://dump/data_utils.py)
 - [dump/scrape_stock_prices.py](file://dump/scrape_stock_prices.py)
 - [dump/scrape_sector.py](file://dump/scrape_sector.py)
 - [dump/report_generator.py](file://dump/report_generator.py)
 - [dump/notes.md](file://dump/notes.md)
+- [migrate_technicals.py](file://migrate_technicals.py)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Major architectural enhancement with complete overhaul of data engineering pipeline
-- Added comprehensive portfolio management system (portfolio_engine.py) for investment tracking and performance metrics
-- Implemented candidate selection logic (candidates.py) for automated stock screening and selection
-- Introduced event-driven architecture (events.py) for real-time market data processing and notifications
-- Enhanced advanced screening capabilities (screener.py) for sophisticated financial analysis
-- Added investment universe management (universe.py) for dynamic portfolio construction
-- Implemented portfolio review functionality (portfolio_review.py) for performance analysis and reporting
-- Enhanced pipeline orchestration and database schema to support new portfolio tracking and performance metrics
-- Expanded data engineering module with 600+ additional lines of sophisticated financial analysis capabilities
+- Major architectural overhaul with new enrichment system (enrich.py) for sophisticated rolling batch processing
+- Enhanced pipeline architecture with night/day separation and smart scheduling for API rate limits
+- Technical indicators migration to dedicated table with improved batch processing capabilities
+- New database schema supporting trading configurations, news metadata, and user preferences
+- Command-line interface enhancements with comprehensive pipeline orchestration options
+- Sophisticated rolling batch enrichment with watchlist prioritization and staleness-based scheduling
+- Specialized technical indicator computation with optimized batch processing
+- Complete portfolio management system integration with deterministic rules engine
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -44,28 +41,27 @@ Let me proceed with updating the documentation based on the information provided
 3. [Core Components](#core-components)
 4. [Architecture Overview](#architecture-overview)
 5. [Detailed Component Analysis](#detailed-component-analysis)
-6. [Portfolio Management System](#portfolio-management-system)
-7. [Candidate Selection Logic](#candidate-selection-logic)
-8. [Event-Driven Architecture](#event-driven-architecture)
-9. [Advanced Screening Capabilities](#advanced-screening-capabilities)
-10. [Investment Universe Management](#investment-universe-management)
-11. [Portfolio Review Functionality](#portfolio-review-functionality)
-12. [Pipeline Implementation](#pipeline-implementation)
-13. [Enhanced Data Ingestion Pipeline](#enhanced-data-ingestion-pipeline)
-14. [Google Finance Integration](#google-finance-integration)
-15. [DuckDB Vendor Support](#duckdb-vendor-support)
-16. [Advanced Database Operations](#advanced-database-operations)
-17. [Command-Line Interface Capabilities](#command-line-interface-capabilities)
-18. [Data Processing and Reporting Module](#data-processing-and-reporting-module)
-19. [Financial Market Analysis Capabilities](#financial-market-analysis-capabilities)
-20. [Production Deployment Features](#production-deployment-features)
-21. [Dependency Analysis](#dependency-analysis)
-22. [Performance Considerations](#performance-considerations)
-23. [Troubleshooting Guide](#troubleshooting-guide)
-24. [Conclusion](#conclusion)
+6. [Enrichment System](#enrichment-system)
+7. [Enhanced Pipeline Architecture](#enhanced-pipeline-architecture)
+8. [Technical Indicators Migration](#technical-indicators-migration)
+9. [Portfolio Management System](#portfolio-management-system)
+10. [Candidate Selection Logic](#candidate-selection-logic)
+11. [Event-Driven Architecture](#event-driven-architecture)
+12. [Advanced Screening Capabilities](#advanced-screening-capabilities)
+13. [Investment Universe Management](#investment-universe-management)
+14. [Portfolio Review Functionality](#portfolio-review-functionality)
+15. [Database Schema Enhancements](#database-schema-enhancements)
+16. [Command-Line Interface Capabilities](#command-line-interface-capabilities)
+17. [Data Processing and Reporting Module](#data-processing-and-reporting-module)
+18. [Financial Market Analysis Capabilities](#financial-market-analysis-capabilities)
+19. [Production Deployment Features](#production-deployment-features)
+20. [Dependency Analysis](#dependency-analysis)
+21. [Performance Considerations](#performance-considerations)
+22. [Troubleshooting Guide](#troubleshooting-guide)
+23. [Conclusion](#conclusion)
 
 ## Introduction
-This document describes the Data Engineering Module responsible for ingesting data and persisting it to a database. The module has been significantly enhanced as a complete data engineering subsystem with a robust data ingestion pipeline, advanced database management utilities, comprehensive command-line interface capabilities, and a new automated pipeline orchestrator specifically designed for financial market data processing. **Updated**: The module now includes Google Finance integration capabilities, enhanced DuckDB vendor support, expanded pipeline functionality for multi-source financial data processing, comprehensive portfolio management system, candidate selection logic, event-driven architecture, advanced screening capabilities, investment universe management, and portfolio review functionality. **Performance Optimization**: Recent updates have focused on optimizing processing speed through improved batch handling, memory management, and parallel execution strategies. It focuses on the enhanced data pipeline entry points, sophisticated ingestion logic, advanced database interactions, Google Finance data sourcing, the new pipeline orchestration layer within the data_eng package, comprehensive portfolio management capabilities, and the new comprehensive data processing and reporting capabilities in the dump/ directory. The goal is to provide both a high-level understanding and detailed technical insights into how data flows through the enhanced module, how components interact, and where to look when diagnosing issues or extending functionality for production deployments.
+This document describes the Data Engineering Module responsible for ingesting data and persisting it to a database. The module has been significantly enhanced as a complete data engineering subsystem with a robust data ingestion pipeline, advanced database management utilities, comprehensive command-line interface capabilities, and a new automated pipeline orchestrator specifically designed for financial market data processing. **Updated**: The module now includes a sophisticated enrichment system with rolling batch processing, enhanced pipeline architecture with night/day separation, technical indicators migration to dedicated tables, improved batch processing capabilities, new database schema support, and comprehensive command-line interface enhancements. The system features smart scheduling for API rate limits, specialized technical indicator computation, and complete portfolio management integration. It focuses on the enhanced data pipeline entry points, sophisticated ingestion logic, advanced database interactions, Google Finance data sourcing, the new pipeline orchestration layer within the data_eng package, comprehensive portfolio management capabilities, and the new comprehensive data processing and reporting capabilities in the dump/ directory. The goal is to provide both a high-level understanding and detailed technical insights into how data flows through the enhanced module, how components interact, and where to look when diagnosing issues or extending functionality for production deployments.
 
 ## Project Structure
 The data engineering module is implemented as a Python package under data_eng with the following key files:
@@ -75,6 +71,7 @@ The data engineering module is implemented as a Python package under data_eng wi
 - ingest.py: Ingestion logic for reading sources and writing to the database with significant enhancements including news-specific workflows
 - pipeline.py: New automated pipeline orchestrator providing end-to-end data processing workflows for stock market data with performance optimizations
 - gfinance.py: **New** Google Finance integration module for financial data sourcing and processing
+- **enrich.py**: **New** Sophisticated enrichment system with rolling batch processing and smart scheduling
 - **portfolio_engine.py**: **New** Comprehensive portfolio management system for investment tracking and performance metrics
 - **candidates.py**: **New** Candidate selection logic for automated stock screening and selection
 - **events.py**: **New** Event-driven architecture for real-time market data processing and notifications
@@ -98,21 +95,23 @@ C["db.py"]
 D["ingest.py"]
 E["pipeline.py"]
 F["gfinance.py"]
-G["portfolio_engine.py"]
-H["candidates.py"]
-I["events.py"]
-J["screener.py"]
-K["universe.py"]
-L["portfolio_review.py"]
+G["enrich.py"]
+H["portfolio_engine.py"]
+I["candidates.py"]
+J["events.py"]
+K["screener.py"]
+L["universe.py"]
+M["portfolio_review.py"]
 end
 subgraph "dump"
-M["data_utils.py"]
-N["scrape_stock_prices.py"]
-O["scrape_sector.py"]
-P["report_generator.py"]
-Q["notes.md"]
+N["data_utils.py"]
+O["scrape_stock_prices.py"]
+P["scrape_sector.py"]
+Q["report_generator.py"]
+R["notes.md"]
 end
-R["analysis/duckdb_vendor.py"]
+S["analysis/duckdb_vendor.py"]
+T["migrate_technicals.py"]
 B --> E
 E --> D
 D --> C
@@ -122,17 +121,19 @@ A --> E
 B --> C
 E --> C
 E --> F
+E --> G
 F --> C
-D --> M
 D --> N
 D --> O
 D --> P
-D --> R
-G --> H
-G --> I
-G --> J
-G --> K
-G --> L
+D --> S
+H --> I
+H --> J
+H --> K
+H --> L
+H --> M
+H --> C
+G --> D
 G --> C
 ```
 
@@ -143,6 +144,7 @@ G --> C
 - [data_eng/ingest.py](file://data_eng/ingest.py)
 - [data_eng/pipeline.py](file://data_eng/pipeline.py)
 - [data_eng/gfinance.py](file://data_eng/gfinance.py)
+- [data_eng/enrich.py](file://data_eng/enrich.py)
 - [data_eng/portfolio_engine.py](file://data_eng/portfolio_engine.py)
 - [data_eng/candidates.py](file://data_eng/candidates.py)
 - [data_eng/events.py](file://data_eng/events.py)
@@ -154,14 +156,16 @@ G --> C
 - [dump/scrape_sector.py](file://dump/scrape_sector.py)
 - [dump/report_generator.py](file://dump/report_generator.py)
 - [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
+- [migrate_technicals.py](file://migrate_technicals.py)
 
 ## Core Components
-- **Automated Pipeline Orchestrator (pipeline.py)**: New 87-line module that provides end-to-end data processing workflows for stock market data, including ingestion, transformation, and output capabilities with automated scheduling, error handling, and **performance optimizations for improved processing speed**.
-- **Enhanced Ingestion Engine (ingest.py)**: Orchestrates reading from one or more data sources, transforming records, and writing them to the database with significant improvements including batch processing, error handling, retry mechanisms, and logging hooks. Now supports 430+ lines of enhanced functionality with specialized news data processing workflows and **optimized data flow patterns**.
+- **Automated Pipeline Orchestrator (pipeline.py)**: New 346-line module that provides end-to-end data processing workflows for stock market data, including ingestion, transformation, and output capabilities with automated scheduling, error handling, and **performance optimizations for improved processing speed**. Features night/day pipeline separation with smart scheduling.
+- **Enhanced Ingestion Engine (ingest.py)**: Orchestrates reading from one or more data sources, transforming records, and writing them to the database with significant improvements including batch processing, error handling, retry mechanisms, and logging hooks. Now supports 874+ lines of enhanced functionality with specialized news data processing workflows and **optimized data flow patterns**. Includes technical indicators batch processing.
+- **Sophisticated Enrichment System (enrich.py)**: **New** 254-line module providing rolling batch enrichment with watchlist prioritization, staleness-based scheduling, and smart API rate limit management. Supports fundamentals, analyst targets, and ticker enrichment with configurable limits.
 - **Google Finance Integration (gfinance.py)**: **New** Module providing seamless integration with Google Finance API for real-time and historical financial data retrieval, price updates, and market information.
-- **Advanced Database Layer (db.py)**: Manages connections, transactions, and provides helper functions for executing queries and handling results with 63 additional lines of expanded functionality. **Updated**: Enhanced with 21 additional lines supporting trading configurations, news metadata, and user preferences schema. Abstracts vendor-specific details behind a consistent interface with **optimized query execution**.
+- **Advanced Database Layer (db.py)**: Manages connections, transactions, and provides helper functions for executing queries and handling results with 279 lines of expanded functionality. **Updated**: Enhanced with comprehensive schema support for trading configurations, news metadata, user preferences, technical indicators, and portfolio management. Abstracts vendor-specific details behind a consistent interface with **optimized query execution**.
 - **DuckDB Vendor Support (analysis/duckdb_vendor.py)**: **New** Specialized vendor implementation for DuckDB database with optimized query execution and analytical capabilities.
-- **Command-Line Interface (__main__.py)**: Provides comprehensive command-line interface to run ingestion jobs, parse arguments, invoke the ingestion engine, and orchestrate the new pipeline with appropriate configuration for production use.
+- **Command-Line Interface (__main__.py)**: Provides comprehensive command-line interface to run ingestion jobs, parse arguments, invoke the ingestion engine, and orchestrate the new pipeline with appropriate configuration for production use. **Updated**: Enhanced with night pipeline, enrichment, screening, candidate selection, event detection, and portfolio management commands.
 - **Package Initialization (__init__.py)**: Exposes public APIs for importing ingestion, database utilities, and pipeline orchestration from other modules.
 - **Data Processing Utilities (dump/data_utils.py)**: **New** Comprehensive data utility functions for financial market data processing, cleaning, and transformation.
 - **Stock Price Scraping (dump/scrape_stock_prices.py)**: **New** Dedicated module for scraping real-time and historical stock prices from various financial data sources.
@@ -173,6 +177,7 @@ G --> C
 - **Advanced Screening Capabilities (screener.py)**: **New** Sophisticated financial analysis tools for comprehensive stock screening and evaluation.
 - **Investment Universe Management (universe.py)**: **New** Dynamic portfolio construction and investment universe management system.
 - **Portfolio Review Functionality (portfolio_review.py)**: **New** Performance analysis and reporting system for portfolio evaluation and optimization.
+- **Technical Indicators Migration (migrate_technicals.py)**: **New** Migration tool for splitting technical indicators from ticker_enriched to dedicated technicals table.
 
 Key responsibilities:
 - Separation of concerns between pipeline orchestration, ingestion, and persistence
@@ -181,7 +186,10 @@ Key responsibilities:
 - Robust error handling and retry strategies across all layers
 - Logging and observability hooks throughout the processing chain
 - Production-ready deployment features with monitoring and alerting
-- **New**: Specialized support for trading configurations, news metadata, and user preferences data models
+- **New**: Sophisticated enrichment system with rolling batch processing and smart scheduling
+- **New**: Night/day pipeline separation with staleness-based optimization
+- **New**: Technical indicators migration to dedicated table with batch processing
+- **New**: Enhanced database schema supporting trading configurations, news metadata, and user preferences
 - **New**: Google Finance API integration for comprehensive financial data sourcing
 - **New**: DuckDB vendor support for advanced analytical workloads
 - **New**: Comprehensive data processing and reporting capabilities in dump/ directory
@@ -189,11 +197,12 @@ Key responsibilities:
 - **New**: Complete portfolio management system with performance tracking and optimization
 - **New**: Event-driven architecture for real-time market data processing
 - **New**: Advanced screening and candidate selection algorithms
-- **Performance**: Optimized processing speed through batch operations, memory management, and parallel execution
+- **Performance**: Optimized processing speed through batch operations, memory management, parallel execution, and smart scheduling
 
 **Section sources**
 - [data_eng/pipeline.py](file://data_eng/pipeline.py)
 - [data_eng/ingest.py](file://data_eng/ingest.py)
+- [data_eng/enrich.py](file://data_eng/enrich.py)
 - [data_eng/gfinance.py](file://data_eng/gfinance.py)
 - [data_eng/db.py](file://data_eng/db.py)
 - [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
@@ -209,14 +218,17 @@ Key responsibilities:
 - [data_eng/screener.py](file://data_eng/screener.py)
 - [data_eng/universe.py](file://data_eng/universe.py)
 - [data_eng/portfolio_review.py](file://data_eng/portfolio_review.py)
+- [migrate_technicals.py](file://migrate_technicals.py)
 
 ## Architecture Overview
 The enhanced data pipeline follows a clear separation of concerns with production-ready features and automated orchestration:
 - The entry point parses CLI arguments and invokes either the ingestion engine directly or the new pipeline orchestrator with comprehensive configuration options.
-- The pipeline orchestrator coordinates multiple processing stages including data ingestion, transformation, validation, and output generation with **optimized execution patterns**.
+- The pipeline orchestrator coordinates multiple processing stages including data ingestion, transformation, validation, and output generation with **optimized execution patterns** and night/day separation.
 - The ingestion engine reads data from multiple sources including Google Finance, transforms it, and delegates writes to the database layer with enhanced error handling and specialized news data processing.
 - The database layer handles connection lifecycle and executes SQL statements with advanced transaction management and enhanced schema support.
-- **New**: Google Finance integration provides real-time market data access and historical price information.
+- **New**: Sophisticated enrichment system provides rolling batch processing with watchlist prioritization and staleness-based scheduling.
+- **New**: Night pipeline handles bulk enrichment operations while day pipeline focuses on real-time data updates.
+- **New**: Technical indicators are computed separately and stored in dedicated table for optimal performance.
 - **New**: Dump directory provides comprehensive data processing and reporting capabilities with automated scraping and analysis tools.
 - **New**: Portfolio management system integrates seamlessly with the pipeline for comprehensive investment tracking and performance analysis.
 - **New**: Event-driven architecture enables real-time market data processing and immediate response to market changes.
@@ -224,41 +236,45 @@ The enhanced data pipeline follows a clear separation of concerns with productio
 ```mermaid
 sequenceDiagram
 participant CLI as "__main__.py"
-participant Pipeline as "pipeline.py"
+participant DailyPipeline as "Daily Pipeline"
+participant NightPipeline as "Night Pipeline"
+participant Enrich as "enrich.py"
 participant Ingest as "ingest.py"
 participant GF as "gfinance.py"
 participant Portfolio as "portfolio_engine.py"
 participant Events as "events.py"
 participant DB as "db.py"
 participant Dump as "dump/*"
-CLI->>Pipeline : "parse args and call run_pipeline()"
-Pipeline->>Ingest : "execute ingestion workflow"
-Ingest->>GF : "fetch financial data"
-GF-->>Ingest : "market data & prices"
-Ingest->>Dump : "process with data utilities"
-Dump-->>Ingest : "processed data"
-Ingest->>Ingest : "read source(s)"
-Ingest->>Ingest : "transform records"
-Ingest->>DB : "open connection"
-Ingest->>DB : "execute write operations with enhanced schema"
-DB-->>Ingest : "results/status"
-Ingest->>DB : "commit or rollback"
-Ingest-->>Pipeline : "ingestion status"
-Pipeline->>Portfolio : "update portfolio positions"
-Portfolio->>Events : "trigger portfolio events"
-Events-->>Portfolio : "event responses"
-Portfolio->>DB : "store portfolio data"
-Pipeline->>Pipeline : "transformation & validation"
-Pipeline->>Dump : "generate reports"
-Dump-->>Pipeline : "reports generated"
-Pipeline-->>CLI : "summary and logs"
-Note over Pipeline,Ingest,Dump,Portfolio,Events : Automated workflow orchestration with Google Finance integration, portfolio management, event-driven processing, and report generation
+Note over CLI : User Input
+CLI->>DailyPipeline : "Run daily pipeline"
+CLI->>NightPipeline : "Run night pipeline"
+Note over DailyPipeline : Day Operations
+DailyPipeline->>Ingest : "Batch price ingestion"
+DailyPipeline->>Ingest : "Technical indicators computation"
+DailyPipeline->>Ingest : "News ingestion (smart-scheduled)"
+DailyPipeline->>GF : "Google Finance overview"
+DailyPipeline->>Events : "Event detection"
+DailyPipeline->>Portfolio : "Portfolio engine execution"
+DailyPipeline->>Dump : "Generate reports"
+Note over NightPipeline : Night Operations
+NightPipeline->>Enrich : "Rolling batch enrichment"
+Enrich->>Ingest : "Fundamentals ingestion"
+Enrich->>Ingest : "Analyst targets ingestion"
+Enrich->>Ingest : "Ticker enrichment"
+NightPipeline->>DB : "Universe refresh"
+Ingest->>DB : "Execute write operations"
+GF-->>Ingest : "Market data & prices"
+Events-->>Portfolio : "Event responses"
+Portfolio->>DB : "Store portfolio data"
+Dump-->>CLI : "Reports generated"
+Note over All : Smart scheduling with staleness checks
 ```
 
 **Diagram sources**
 - [data_eng/__main__.py](file://data_eng/__main__.py)
 - [data_eng/pipeline.py](file://data_eng/pipeline.py)
 - [data_eng/ingest.py](file://data_eng/ingest.py)
+- [data_eng/enrich.py](file://data_eng/enrich.py)
 - [data_eng/gfinance.py](file://data_eng/gfinance.py)
 - [data_eng/portfolio_engine.py](file://data_eng/portfolio_engine.py)
 - [data_eng/events.py](file://data_eng/events.py)
@@ -270,37 +286,98 @@ Note over Pipeline,Ingest,Dump,Portfolio,Events : Automated workflow orchestrati
 
 ## Detailed Component Analysis
 
-### Automated Pipeline Orchestrator (pipeline.py)
-**New Component** - 87 lines of automated workflow orchestration with **performance optimizations**
+### Sophisticated Enrichment System (enrich.py)
+**New Component** - 254 lines of rolling batch enrichment with smart scheduling
 
 Responsibilities:
-- End-to-end data processing workflow coordination for stock market data
-- Automated ingestion, transformation, validation, and output generation
-- Error handling and recovery across multiple processing stages
-- Progress tracking and metrics collection for pipeline execution
-- Configuration management and parameter validation
-- **Performance Optimization**: Enhanced processing speed through optimized batch handling and memory management
+- Rolling batch enrichment for fundamentals, analyst targets, and ticker data
+- Watchlist prioritization with rating-based filtering
+- Staleness-based scheduling to optimize API usage
+- Configurable batch limits and sector filtering
+- Progress tracking and error handling with retry mechanisms
+- **Smart Scheduling**: Processes oldest-loaded tickers first to maintain data freshness
 
 Processing flow:
-- Initialize pipeline with stock market data configuration
-- Execute ingestion stage using the enhanced ingestion engine with optimized data flow
-- Perform data transformation and validation rules with improved efficiency
-- Generate output artifacts and reports
-- Handle errors and implement retry mechanisms
-- Provide comprehensive execution metrics and logging
+- Load watchlist and build eligible ticker query with rating filters
+- Query database for stale/missing data ordered by last fetched date
+- Process tickers in batches with API pause between requests
+- Track progress and handle failures gracefully
+- Return success count for monitoring and logging
 
 ```mermaid
 flowchart TD
-Start(["Start Pipeline"]) --> Init["Initialize Pipeline"]
-Init --> IngestStage["Execute Ingestion Stage"]
-IngestStage --> TransformStage["Execute Transformation Stage"]
-TransformStage --> ValidateStage["Execute Validation Stage"]
-ValidateStage --> OutputStage["Execute Output Stage"]
-OutputStage --> Success{"All Stages Success?"}
-Success --> |Yes| Complete["Complete Successfully"]
-Success --> |No| HandleError["Handle Error & Retry"]
-HandleError --> IngestStage
-Complete --> End(["End"])
+Start(["Start Enrichment"]) --> LoadWatchlist["Load Watchlist"]
+LoadWatchlist --> BuildQuery["Build Eligible Ticker Query"]
+BuildQuery --> QueryDB["Query Database for Stale Data"]
+QueryDB --> CheckRows{"Rows Found?"}
+CheckRows --> |No| NoEligible["No Eligible Tickers"]
+CheckRows --> |Yes| ProcessBatch["Process Batch"]
+ProcessBatch --> ForEachTicker["For Each Ticker"]
+ForEachTicker --> CheckStaleness["Check Last Fetched Date"]
+CheckStaleness --> IngestData["Ingest Data"]
+IngestData --> Success{"Success?"}
+Success --> |Yes| CountSuccess["Count Success"]
+Success --> |No| LogError["Log Error"]
+CountSuccess --> NextTicker["Next Ticker"]
+LogError --> NextTicker
+NextTicker --> MoreTickers{"More Tickers?"}
+MoreTickers --> |Yes| ForEachTicker
+MoreTickers --> |No| Complete["Complete"]
+NoEligible --> End(["End"])
+Complete --> End
+```
+
+**Diagram sources**
+- [data_eng/enrich.py](file://data_eng/enrich.py)
+
+**Section sources**
+- [data_eng/enrich.py](file://data_eng/enrich.py)
+
+### Enhanced Pipeline Architecture (pipeline.py)
+**Updated** - 346 lines with night/day separation and smart scheduling
+
+Responsibilities:
+- Dual pipeline architecture with separate day and night operations
+- Smart scheduling based on data staleness thresholds
+- Coordinated execution of multiple data sources with rate limiting
+- Technical indicators computation and storage
+- Portfolio engine integration with event-driven processing
+- **Night Pipeline**: Handles bulk enrichment operations with rolling batches
+- **Day Pipeline**: Focuses on real-time updates and analysis
+
+Processing flow:
+- Initialize pipeline with configuration parameters
+- Execute day pipeline: prices, news, technicals, AI summaries, screening
+- Execute night pipeline: universe refresh, financials, bulk enrichment
+- Apply smart scheduling to skip fresh data and optimize API usage
+- Generate comprehensive logs and metrics for monitoring
+
+```mermaid
+flowchart TD
+Start(["Start Pipeline"]) --> CheckMode{"Pipeline Mode?"}
+CheckMode --> |Day| DayPipeline["Day Pipeline"]
+CheckMode --> |Night| NightPipeline["Night Pipeline"]
+DayPipeline --> Prices["Batch Price Ingestion"]
+Prices --> Technicals["Technical Indicators"]
+Technicals --> News["News Ingestion (Smart-Scheduled)"]
+News --> GlobalNews["Global News"]
+GlobalNews --> GFinance["Google Finance Overview"]
+GFinance --> YFinance["Yahoo Finance Overview"]
+YFinance --> Summaries["AI News Summaries"]
+Summaries --> Screener["Quantitative Screener"]
+Screener --> Candidates["Candidate Selection"]
+Candidates --> Events["Event Detection"]
+Events --> Portfolio["Portfolio Engine"]
+Portfolio --> Review["Portfolio Review"]
+Review --> DayComplete["Day Complete"]
+NightPipeline --> Universe["Universe Refresh"]
+Universe --> Financials["Financials Ingestion"]
+Financials --> Fundamentals["Bulk Fundamentals"]
+Fundamentals --> Analyst["Bulk Analyst Targets"]
+Analyst --> Enriched["Bulk Ticker Enriched"]
+Enriched --> NightComplete["Night Complete"]
+DayComplete --> End(["End"])
+NightComplete --> End
 ```
 
 **Diagram sources**
@@ -309,6 +386,42 @@ Complete --> End(["End"])
 **Section sources**
 - [data_eng/pipeline.py](file://data_eng/pipeline.py)
 
+### Technical Indicators Migration (migrate_technicals.py)
+**New Component** - Migration tool for technical indicators separation
+
+Responsibilities:
+- Create dedicated technicals table for technical indicator data
+- Migrate existing technical columns from ticker_enriched to technicals table
+- Drop migrated columns from ticker_enriched to reduce table size
+- Idempotent migration that can be safely re-run
+- Safe column existence checking and partial migration support
+
+Migration process:
+- Create technicals table with all required columns
+- Check if ticker_enriched contains technical columns
+- Copy data from ticker_enriched to technicals table
+- Drop migrated columns from ticker_enriched
+- Report migration statistics and completion status
+
+```mermaid
+flowchart TD
+Start(["Start Migration"]) --> CreateTable["Create technicals Table"]
+CreateTable --> CheckCols["Check Existing Columns"]
+CheckCols --> HasCols{"Has Technical Columns?"}
+HasCols --> |No| AlreadyDone["Already Migrated"]
+HasCols --> |Yes| CopyData["Copy Data to technicals"]
+CopyData --> DropCols["Drop Columns from ticker_enriched"]
+DropCols --> Complete["Migration Complete"]
+AlreadyDone --> End(["End"])
+Complete --> End
+```
+
+**Diagram sources**
+- [migrate_technicals.py](file://migrate_technicals.py)
+
+**Section sources**
+- [migrate_technicals.py](file://migrate_technicals.py)
+
 ### Enhanced Ingestion Engine (ingest.py)
 Responsibilities:
 - Source discovery and reading with enhanced validation
@@ -316,7 +429,8 @@ Responsibilities:
 - Batched writes to the database with optimized performance
 - Error handling and retries with configurable strategies
 - Progress reporting and metrics collection
-- **New**: Specialized news data processing workflows with improved data flow between ingestion, analysis, and summarization components
+- **New**: Technical indicators batch processing with compute_technicals function
+- **New**: Enhanced batch_ingest_technicals for computing and storing technical indicators
 - **Performance**: Optimized batch processing and memory management for improved throughput
 
 Processing flow:
@@ -325,6 +439,7 @@ Processing flow:
 - Transform each record with advanced validation rules
 - Write to database via db helpers with transaction support
 - Handle exceptions and log outcomes with detailed diagnostics
+- **New**: Technical indicators computation and storage
 
 ```mermaid
 flowchart TD
@@ -333,8 +448,8 @@ ReadSource --> Validate["Validate Records"]
 Validate --> Valid{"Valid?"}
 Valid --> |No| Skip["Skip/Log Invalid"]
 Valid --> |Yes| Transform["Transform Records"]
-Transform --> NewsFlow["News Data Flow Processing"]
-NewsFlow --> Batch["Batch Records"]
+Transform --> TechIndicators["Compute Technical Indicators"]
+TechIndicators --> Batch["Batch Records"]
 Batch --> Write["Write to DB"]
 Write --> Success{"Write Success?"}
 Success --> |No| Retry["Retry/Fallback"]
@@ -425,14 +540,14 @@ class DuckDBVendor {
 - [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
 
 ### Advanced Database Layer (db.py)
-**Updated** - Enhanced with 21 additional lines for new schema support
+**Updated** - 279 lines with comprehensive schema support
 
 Responsibilities:
 - Connection management (connect, close, pool if applicable) with enhanced reliability
 - Transaction control (begin, commit, rollback) with improved error handling
 - Query execution helpers (execute, executemany) with better performance
 - Result mapping and error translation with comprehensive diagnostics
-- **New**: Enhanced schema support for trading configurations, news metadata, and user preferences
+- **New**: Comprehensive schema support for trading configurations, news metadata, user preferences, technical indicators, and portfolio management
 - **Performance**: Optimized query execution and connection pooling
 
 Common patterns:
@@ -459,6 +574,8 @@ class DatabaseManager {
 +manage_user_preferences()
 +integrate_google_finance()
 +support_duckdb_vendor()
++manage_technical_indicators()
++handle_portfolio_data()
 }
 ```
 
@@ -469,7 +586,7 @@ class DatabaseManager {
 - [data_eng/db.py](file://data_eng/db.py)
 
 ### Command-Line Interface Capabilities (__main__.py)
-**Updated** - Enhanced with pipeline orchestration capabilities
+**Updated** - Enhanced with comprehensive pipeline orchestration
 
 Responsibilities:
 - Parse command-line arguments (e.g., source path, destination, mode) with comprehensive options
@@ -483,22 +600,28 @@ Typical usage:
 - Dry-run mode for validation and testing
 - Incremental updates based on timestamps or IDs
 - Monitoring and health check endpoints
+- **New**: Night pipeline execution with bulk enrichment
+- **New**: Enrichment commands with sector filtering and limits
+- **New**: Screening, candidate selection, and event detection commands
+- **New**: Portfolio engine and review execution
 
 ```mermaid
 sequenceDiagram
 participant User as "User"
 participant Main as "__main__.py"
-participant Pipeline as "pipeline.py"
-participant Ingest as "ingest.py"
-participant GF as "gfinance.py"
-User->>Main : "python -m data_eng --pipeline --source ... --mode ..."
+participant Daily as "Daily Pipeline"
+participant Night as "Night Pipeline"
+participant Enrich as "Enrichment"
+participant Ingest as "Ingestion"
+participant GF as "Google Finance"
+User->>Main : "python -m data_eng --daily --smart"
 Main->>Main : "parse args"
-Main->>Pipeline : "run_pipeline(args)"
-Pipeline->>Ingest : "execute ingestion workflow"
+Main->>Daily : "run_daily_pipeline(args)"
+Daily->>Ingest : "execute ingestion workflow"
 Ingest->>GF : "fetch Google Finance data"
 GF-->>Ingest : "market data"
-Ingest-->>Pipeline : "status and metrics"
-Pipeline-->>Main : "pipeline completion status"
+Ingest-->>Daily : "status and metrics"
+Daily-->>Main : "pipeline completion status"
 Main-->>User : "exit code and logs"
 ```
 
@@ -506,6 +629,7 @@ Main-->>User : "exit code and logs"
 - [data_eng/__main__.py](file://data_eng/__main__.py)
 - [data_eng/pipeline.py](file://data_eng/pipeline.py)
 - [data_eng/ingest.py](file://data_eng/ingest.py)
+- [data_eng/enrich.py](file://data_eng/enrich.py)
 - [data_eng/gfinance.py](file://data_eng/gfinance.py)
 
 **Section sources**
@@ -526,10 +650,195 @@ Usage pattern:
 **Section sources**
 - [data_eng/__init__.py](file://data_eng/__init__.py)
 
+## Enrichment System
+**New Section** - Comprehensive coverage of the sophisticated enrichment system
+
+The new enrich.py module (254 lines) provides a sophisticated rolling batch enrichment system specifically designed for financial data processing. This component serves as the core engine for managing data freshness and optimizing API usage through intelligent scheduling.
+
+### Key Features
+- **Rolling Batch Processing**: Processes tickers in configurable batches with priority ordering
+- **Watchlist Prioritization**: Always processes watchlist tickers first regardless of rating
+- **Rating-Based Filtering**: Filters eligible tickers by rating (Strong Buy, Buy)
+- **Staleness-Based Scheduling**: Prioritizes tickers with oldest data for refresh
+- **Sector Filtering**: Optional sector-based filtering for targeted enrichment
+- **Configurable Limits**: Adjustable batch sizes and processing limits
+- **Progress Tracking**: Detailed logging and progress monitoring
+- **Error Handling**: Graceful failure handling with retry mechanisms
+
+### Processing Workflow
+1. **Watchlist Loading**: Load watchlist from JSON file with fallback handling
+2. **Eligible Ticker Query**: Build complex SQL query combining watchlist and rating filters
+3. **Staleness Calculation**: Order tickers by last fetched date (oldest first)
+4. **Batch Processing**: Process tickers in configurable batches with API pauses
+5. **Data Ingestion**: Call appropriate ingestion functions for each ticker
+6. **Progress Tracking**: Log progress every 50 tickers with success counts
+7. **Error Management**: Handle failures gracefully without stopping entire batch
+
+### Supported Data Types
+- **Fundamentals**: Company fundamentals and financial metrics
+- **Analyst Targets**: Analyst recommendations and price targets
+- **Ticker Enriched**: Combined growth estimates and target data
+
+```mermaid
+flowchart TD
+Start(["Start Enrichment"]) --> LoadWatchlist["Load Watchlist"]
+LoadWatchlist --> BuildQuery["Build Eligible Query"]
+BuildQuery --> QueryDB["Query Database"]
+QueryDB --> CheckResults{"Results Found?"}
+CheckResults --> |No| ExitEarly["Exit Early"]
+CheckResults --> |Yes| ProcessBatch["Process Batch"]
+ProcessBatch --> ForEachTicker["For Each Ticker"]
+ForEachTicker --> DetermineType{"Data Type?"}
+DetermineType --> |Fundamentals| IngestFundamentals["Ingest Fundamentals"]
+DetermineType --> |Analyst| IngestAnalyst["Ingest Analyst Targets"]
+DetermineType --> |Enriched| IngestEnriched["Ingest Ticker Enriched"]
+IngestFundamentals --> SuccessCheck{"Success?"}
+IngestAnalyst --> SuccessCheck
+IngestEnriched --> SuccessCheck
+SuccessCheck --> |Yes| CountSuccess["Count Success"]
+SuccessCheck --> |No| LogError["Log Error"]
+CountSuccess --> NextTicker["Next Ticker"]
+LogError --> NextTicker
+NextTicker --> MoreTickers{"More Tickers?"}
+MoreTickers --> |Yes| ForEachTicker
+MoreTickers --> |No| Complete["Complete"]
+ExitEarly --> End(["End"])
+Complete --> End
+```
+
+**Diagram sources**
+- [data_eng/enrich.py](file://data_eng/enrich.py)
+
+**Section sources**
+- [data_eng/enrich.py](file://data_eng/enrich.py)
+
+## Enhanced Pipeline Architecture
+**New Section** - Comprehensive coverage of the dual pipeline architecture
+
+The enhanced pipeline.py module (346 lines) implements a sophisticated dual pipeline architecture with separate day and night operations, smart scheduling, and comprehensive data processing capabilities. This component serves as the central orchestrator for all data processing workflows.
+
+### Key Pipeline Features
+- **Dual Pipeline Architecture**: Separate day and night pipelines for different operational needs
+- **Smart Scheduling**: Staleness-based scheduling to optimize API usage and reduce redundant calls
+- **Coordinated Execution**: Sequential execution of multiple processing stages with error handling
+- **Technical Indicators**: Dedicated computation and storage of technical analysis indicators
+- **Portfolio Integration**: Seamless integration with portfolio management and analysis systems
+- **Event-Driven Processing**: Event-based gating for expensive analysis operations
+- **Comprehensive Logging**: Detailed logging and metrics collection for monitoring
+
+### Day Pipeline Operations
+1. **Batch Price Ingestion**: Download and store daily price data for universe tickers
+2. **Technical Indicators**: Compute and store technical analysis indicators
+3. **News Ingestion**: Smart-scheduled news fetching with staleness checks
+4. **Global News**: Aggregate global market news from multiple sources
+5. **AI Overviews**: Fetch Google Finance and Yahoo Finance AI-powered overviews
+6. **News Summaries**: Generate AI-powered news summaries using local LLM
+7. **Quantitative Screening**: Run scoring algorithms across multiple dimensions
+8. **Candidate Selection**: Select balanced candidates from screened results
+9. **Event Detection**: Detect meaningful market events for analysis gating
+10. **Trading Agents**: Run AI-powered analysis on event-triggered tickers
+11. **Portfolio Engine**: Generate deterministic trade proposals based on rules
+12. **Portfolio Review**: LLM-powered review of portfolio decisions
+
+### Night Pipeline Operations
+1. **Universe Refresh**: Scrape and update the complete stock universe
+2. **Financials Ingestion**: Quarterly financial statement updates for watchlist tickers
+3. **Fundamentals Enrichment**: Rolling batch enrichment of company fundamentals
+4. **Analyst Targets**: Bulk ingestion of analyst recommendations and targets
+5. **Ticker Enrichment**: Comprehensive enrichment with growth estimates and targets
+
+### Smart Scheduling Implementation
+- **News Staleness**: 1-day threshold for news data freshness
+- **Enriched Staleness**: 3-day threshold for growth estimates and targets
+- **Analyst Staleness**: 3-day threshold for analyst recommendation updates
+- **Fundamentals Staleness**: 7-day threshold for company snapshot data
+- **Financials Staleness**: 80-day cycle based on quarterly reporting schedule
+
+```mermaid
+flowchart TD
+Start(["Start Pipeline"]) --> CheckMode{"Pipeline Mode"}
+CheckMode --> |Day| DayOps["Day Operations"]
+CheckMode --> |Night| NightOps["Night Operations"]
+DayOps --> Prices["Batch Price Ingestion"]
+Prices --> Technicals["Technical Indicators"]
+Technicals --> News["Smart-Scheduled News"]
+News --> GlobalNews["Global News Aggregation"]
+GlobalNews --> AIOverviews["AI-Powered Overviews"]
+AIOverviews --> Summaries["AI News Summaries"]
+Summaries --> Screening["Quantitative Screening"]
+Screening --> Candidates["Candidate Selection"]
+Candidates --> Events["Event Detection"]
+Events --> TradingAgents["Trading Agents Analysis"]
+TradingAgents --> PortfolioEngine["Portfolio Engine"]
+PortfolioEngine --> PortfolioReview["Portfolio Review"]
+PortfolioReview --> DayComplete["Day Complete"]
+NightOps --> UniverseRefresh["Universe Refresh"]
+UniverseRefresh --> Financials["Financials Ingestion"]
+Financials --> Fundamentals["Fundamentals Enrichment"]
+Fundamentals --> AnalystTargets["Analyst Targets"]
+AnalystTargets --> TickerEnriched["Ticker Enrichment"]
+TickerEnriched --> NightComplete["Night Complete"]
+DayComplete --> End(["End"])
+NightComplete --> End
+```
+
+**Diagram sources**
+- [data_eng/pipeline.py](file://data_eng/pipeline.py)
+
+**Section sources**
+- [data_eng/pipeline.py](file://data_eng/pipeline.py)
+
+## Technical Indicators Migration
+**New Section** - Comprehensive coverage of technical indicators separation
+
+The migrate_technicals.py module provides a specialized migration tool for separating technical indicator data from the ticker_enriched table into a dedicated technicals table. This optimization improves database performance and data organization.
+
+### Migration Process
+1. **Table Creation**: Create dedicated technicals table with all required columns
+2. **Column Detection**: Check existing technical columns in ticker_enriched table
+3. **Data Migration**: Copy technical indicator data to new technicals table
+4. **Column Cleanup**: Drop migrated columns from ticker_enriched table
+5. **Status Reporting**: Provide detailed migration statistics and completion status
+
+### Technical Indicator Categories
+- **Trend Indicators**: SMA (20, 50), EMA (12, 26)
+- **Momentum Indicators**: MACD (signal, histogram), RSI (14-period)
+- **Volatility Indicators**: Bollinger Bands (upper, middle, lower, width)
+- **Volume Indicators**: Volume SMA (20), On-Balance Volume (OBV), volume ratio
+- **Signal Generation**: Individual signals (RSI, MACD, trend, Bollinger, volume)
+- **Combined Signals**: Combined signal strength and trade signal classification
+
+### Migration Benefits
+- **Improved Performance**: Smaller ticker_enriched table with faster queries
+- **Better Organization**: Logical separation of technical vs fundamental data
+- **Optimized Storage**: Reduced redundancy and improved indexing
+- **Scalability**: Better support for growing number of technical indicators
+- **Maintainability**: Easier maintenance and updates to technical calculations
+
+```mermaid
+flowchart TD
+Start(["Start Migration"]) --> CreateTable["Create technicals Table"]
+CreateTable --> CheckExisting["Check Existing Columns"]
+CheckExisting --> HasColumns{"Has Technical Columns?"}
+HasColumns --> |No| AlreadyDone["Already Migrated - Exit"]
+HasColumns --> |Yes| CopyData["Copy Data to technicals"]
+CopyData --> DropColumns["Drop Columns from ticker_enriched"]
+DropColumns --> ReportStats["Report Migration Statistics"]
+ReportStats --> Complete["Migration Complete"]
+AlreadyDone --> End(["End"])
+Complete --> End
+```
+
+**Diagram sources**
+- [migrate_technicals.py](file://migrate_technicals.py)
+
+**Section sources**
+- [migrate_technicals.py](file://migrate_technicals.py)
+
 ## Portfolio Management System
 **New Section** - Comprehensive coverage of the portfolio management system
 
-The new portfolio_engine.py module provides a complete portfolio management system for investment tracking, performance metrics, and portfolio optimization. This component serves as the central hub for managing investment portfolios and tracking their performance.
+The portfolio_engine.py module (394 lines) provides a complete portfolio management system for investment tracking, performance metrics, and portfolio optimization. This component serves as the central hub for managing investment portfolios and tracking their performance.
 
 ### Key Features
 - **Portfolio Tracking**: Real-time tracking of portfolio positions, holdings, and allocations
@@ -546,6 +855,13 @@ The new portfolio_engine.py module provides a complete portfolio management syst
 - **Optimization Engine**: Portfolio optimization using modern portfolio theory and custom constraints
 - **Reporting System**: Automated portfolio reports and performance attribution analysis
 
+### Rule-Based Decision Engine
+- **Maximum Position Size**: 20% maximum allocation per single stock
+- **Sector Concentration**: 35% maximum exposure per sector
+- **Quality Threshold**: Minimum screener score of 80 for buy decisions
+- **Cash Reserve**: Mandatory 10% cash reserve requirement
+- **Stop Loss**: Mandatory stop loss on all buy positions
+
 ```mermaid
 classDiagram
 class PortfolioEngine {
@@ -558,6 +874,11 @@ class PortfolioEngine {
 +generate_reports(format)
 +track_real_time_data()
 +integrate_with_pipeline()
++apply_rules(decisions)
++calculate_position_sizing()
++check_sector_exposure()
++enforce_cash_reserve()
++generate_stop_losses()
 }
 ```
 
@@ -570,7 +891,7 @@ class PortfolioEngine {
 ## Candidate Selection Logic
 **New Section** - Comprehensive coverage of the candidate selection system
 
-The candidates.py module implements sophisticated candidate selection logic for automated stock screening and investment opportunity identification. This component uses advanced algorithms to identify promising investment candidates based on multiple criteria.
+The candidates.py module (313 lines) implements sophisticated candidate selection logic for automated stock screening and investment opportunity identification. This component uses advanced algorithms to identify promising investment candidates based on multiple criteria.
 
 ### Selection Criteria
 - **Fundamental Analysis**: Financial ratios, earnings quality, and valuation metrics
@@ -586,13 +907,31 @@ The candidates.py module implements sophisticated candidate selection logic for 
 - **Dynamic Rebalancing**: Automatic candidate list updates based on market conditions
 - **Backtesting Framework**: Historical performance validation of selection strategies
 
+### Sector Allocation Strategy
+- **Technology**: Maximum 5 candidates per sector
+- **Healthcare**: Maximum 3 candidates per sector
+- **Financial Services**: Maximum 3 candidates per sector
+- **Consumer Cyclical**: Maximum 2 candidates per sector
+- **Consumer Defensive**: Maximum 1 candidate per sector
+- **Industrials**: Maximum 2 candidates per sector
+- **Energy**: Maximum 1 candidate per sector
+- **Communication Services**: Maximum 1 candidate per sector
+
+### Correlation Filtering
+- **Correlation Threshold**: 0.85 Pearson correlation threshold
+- **Lookback Period**: 6 months (126 trading days) for correlation calculation
+- **Pairwise Analysis**: Comprehensive pairwise correlation matrix computation
+- **Greedy Removal**: Remove lower-scored tickers from highly correlated pairs
+
 ```mermaid
 flowchart TD
 Start(["Start Candidate Selection"]) --> GatherData["Gather Market Data"]
 GatherData --> ApplyFilters["Apply Screening Filters"]
 ApplyFilters --> ScoreCandidates["Score Candidates"]
 ScoreCandidates --> RankResults["Rank Results"]
-RankResults --> ValidateSelection["Validate Selection"]
+RankResults --> SectorAllocation["Apply Sector Allocation"]
+SectorAllocation --> CorrelationFilter["Remove Correlated Pairs"]
+CorrelationFilter --> ValidateSelection["Validate Selection"]
 ValidateSelection --> Success{"Valid Selection?"}
 Success --> |Yes| AddToUniverse["Add to Investment Universe"]
 Success --> |No| RefineCriteria["Refine Criteria"]
@@ -609,7 +948,7 @@ AddToUniverse --> Complete(["Complete"])
 ## Event-Driven Architecture
 **New Section** - Comprehensive coverage of the event-driven system
 
-The events.py module implements an event-driven architecture for real-time market data processing and notification systems. This component enables immediate response to market changes and facilitates asynchronous processing of financial data.
+The events.py module (259 lines) implements an event-driven architecture for real-time market data processing and notification systems. This component enables immediate response to market changes and facilitates asynchronous processing of financial data.
 
 ### Event Types
 - **Market Data Events**: Real-time price updates, volume changes, and market movements
@@ -624,6 +963,12 @@ The events.py module implements an event-driven architecture for real-time marke
 - **Event Sourcing**: Complete audit trail of all market and portfolio events
 - **Real-time Processing**: Low-latency event handling for time-sensitive operations
 - **Scalable Architecture**: Horizontal scaling for high-volume event processing
+
+### Event Detection Logic
+- **Price Move Detection**: 5% daily price change threshold for triggering analysis
+- **Technical Signal Changes**: Trade signal changes in technical indicators
+- **News Events**: New article detection since last analysis date
+- **Earnings Events**: New financial filing detection with report dates
 
 ```mermaid
 sequenceDiagram
@@ -650,7 +995,7 @@ Events-->>Market : "Acknowledgment"
 ## Advanced Screening Capabilities
 **New Section** - Comprehensive coverage of the screening system
 
-The screener.py module provides advanced screening capabilities for sophisticated financial analysis and stock evaluation. This component offers comprehensive tools for analyzing and evaluating investment opportunities across multiple dimensions.
+The screener.py module (437 lines) provides advanced screening capabilities for sophisticated financial analysis and stock evaluation. This component offers comprehensive tools for analyzing and evaluating investment opportunities across multiple dimensions.
 
 ### Screening Dimensions
 - **Fundamental Screening**: Financial statement analysis, ratio analysis, and valuation metrics
@@ -666,6 +1011,13 @@ The screener.py module provides advanced screening capabilities for sophisticate
 - **Performance Attribution**: Detailed analysis of screening strategy effectiveness
 - **Benchmark Comparison**: Comparative analysis against market indices and peer groups
 
+### Scoring Categories
+- **Quality Metrics**: ROE, ROA, gross margin, operating margin, earnings trends
+- **Value Metrics**: Forward PE, PEG ratio, free cash flow yield
+- **Momentum Metrics**: 3-month and 6-month returns, RSI, 200-day moving average
+- **Sentiment Metrics**: Bullish ratio, target upside potential
+- **Risk Metrics**: Debt-to-equity ratio, beta, 63-day volatility
+
 ```mermaid
 classDiagram
 class Screener {
@@ -677,6 +1029,10 @@ class Screener {
 +generate_report(output_format)
 +monitor_performance(real_time)
 +adjust_criteria(dynamic_factors)
++compute_raw_metrics(tickers)
++calculate_percentile_ranks()
++generate_overall_scores()
++export_results(format)
 }
 ```
 
@@ -689,7 +1045,7 @@ class Screener {
 ## Investment Universe Management
 **New Section** - Comprehensive coverage of the investment universe system
 
-The universe.py module manages investment universes for dynamic portfolio construction and asset allocation. This component provides sophisticated tools for defining, managing, and optimizing investment universes based on various criteria and constraints.
+The universe.py module (164 lines) manages investment universes for dynamic portfolio construction and asset allocation. This component provides sophisticated tools for defining, managing, and optimizing investment universes based on various criteria and constraints.
 
 ### Universe Definition
 - **Static Universes**: Fixed sets of securities based on indices, sectors, or custom criteria
@@ -704,6 +1060,19 @@ The universe.py module manages investment universes for dynamic portfolio constr
 - **Weight Calculation**: Automated weight assignment and rebalancing algorithms
 - **Constraint Handling**: Compliance with regulatory and investment policy constraints
 - **Performance Monitoring**: Continuous monitoring of universe composition and performance
+
+### Sector Group Organization
+- **Group 1**: Industrials, Utilities, Basic Materials
+- **Group 2**: Financial Services, Real Estate, Communication Services
+- **Group 3**: Technology, Energy, Consumer Defensive
+- **Group 4**: Healthcare, Consumer Cyclical
+
+### Rating-Based Filtering
+- **Strong Buy**: Highest conviction stocks with strongest fundamentals
+- **Buy**: Solid companies with positive outlook and good valuations
+- **Hold**: Stable companies suitable for income-focused portfolios
+- **Sell**: Companies with deteriorating fundamentals or poor outlook
+- **Underperform**: Companies with significant challenges or negative prospects
 
 ```mermaid
 flowchart TD
@@ -729,7 +1098,7 @@ UpdateUniverse --> DefineUniverse
 ## Portfolio Review Functionality
 **New Section** - Comprehensive coverage of the portfolio review system
 
-The portfolio_review.py module provides comprehensive portfolio review functionality for performance analysis, reporting, and optimization. This component offers detailed analysis tools for evaluating portfolio performance and identifying areas for improvement.
+The portfolio_review.py module (210 lines) provides comprehensive portfolio review functionality for performance analysis, reporting, and optimization. This component offers detailed analysis tools for evaluating portfolio performance and identifying areas for improvement.
 
 ### Performance Analysis
 - **Return Analysis**: Total return, annualized return, and risk-adjusted performance metrics
@@ -745,6 +1114,13 @@ The portfolio_review.py module provides comprehensive portfolio review functiona
 - **Export Formats**: Multiple export formats including PDF, Excel, and interactive HTML
 - **Regulatory Reporting**: Compliance reporting for regulatory requirements
 
+### LLM-Powered Review System
+- **Local LLM Integration**: Uses llama.cpp server for local AI-powered analysis
+- **Context-Aware Prompts**: Builds comprehensive prompts from portfolio decisions and technical analysis summaries
+- **Risk Identification**: Identifies contradictions, concentration risks, and cross-holding interactions
+- **Actionable Insights**: Provides concise, bullet-point recommendations focused on actionable concerns
+- **Constrained Output**: Maintains under 300-word responses for readability and actionability
+
 ```mermaid
 classDiagram
 class PortfolioReview {
@@ -756,6 +1132,11 @@ class PortfolioReview {
 +build_interactive_dashboards()
 +export_reports(format)
 +schedule_automated_reviews()
++ask_llm(system_prompt, user_prompt)
++build_review_prompt(decisions, summaries)
++store_review(date, text)
++load_today_decisions(today)
++load_ta_summaries()
 }
 ```
 
@@ -765,197 +1146,55 @@ class PortfolioReview {
 **Section sources**
 - [data_eng/portfolio_review.py](file://data_eng/portfolio_review.py)
 
-## Pipeline Implementation
-**New Section** - Comprehensive coverage of the automated pipeline orchestrator with **performance optimizations**
+## Database Schema Enhancements
+**New Section** - Comprehensive coverage of database schema improvements
 
-The new pipeline.py module (87 lines) provides a sophisticated automated workflow system specifically designed for stock market data processing with **enhanced processing speed and efficiency**. This component serves as the central orchestrator for end-to-end data processing workflows.
+The database layer has been significantly enhanced with comprehensive schema support for all new system components, providing robust data storage and retrieval capabilities.
 
-### Key Pipeline Features
-- **Automated Workflow Execution**: Coordinates multiple processing stages without manual intervention
-- **Stock Market Data Specialization**: Optimized for financial market data formats and requirements
-- **Multi-stage Processing**: Sequential execution of ingestion, transformation, validation, and output stages
-- **Error Recovery**: Automatic retry mechanisms and graceful failure handling
-- **Progress Tracking**: Real-time monitoring of pipeline execution status
-- **Configuration Management**: Flexible configuration for different data sources and processing rules
-- **New**: Google Finance integration for comprehensive market data sourcing
-- **New**: Portfolio management integration for comprehensive investment tracking
-- **New**: Event-driven processing for real-time market data handling
-- **Performance**: Optimized processing speed through improved batch handling and memory management
+### Core Tables
+- **daily_prices**: OHLCV data with corporate actions (dividends, stock splits)
+- **news**: Ticker-specific news articles with metadata and URLs
+- **global_news**: Aggregated global market news from multiple sources
+- **fundamentals**: Company fundamentals and financial metrics snapshots
+- **financials**: Quarterly financial statements in JSON format
+- **analyst_targets**: Analyst recommendations and price targets
+- **news_summaries**: AI-generated news summaries for tickers
 
-### Pipeline Stages
-1. **Ingestion Stage**: Uses the enhanced ingestion engine to read and validate source data including Google Finance feeds with optimized data flow
-2. **Transformation Stage**: Applies business rules and data transformations specific to stock market analysis with improved efficiency
-3. **Validation Stage**: Ensures data integrity and compliance with financial data standards
-4. **Output Stage**: Generates reports, databases updates, and downstream data artifacts
-5. **Portfolio Integration**: Updates portfolio positions and calculates performance metrics
-6. **Event Processing**: Triggers relevant events for real-time market response
+### Advanced Tables
+- **trading_agent_decisions**: AI-powered trading decisions with ratings and summaries
+- **gfinance_overview**: Google Finance AI-powered bull/bear analysis
+- **yfinance_overview**: Yahoo Finance AI-powered market overviews
+- **ticker_enriched**: Combined growth estimates, targets, and recommendations
+- **technicals**: Dedicated technical indicators table with signals and combined scores
+- **screener_scores**: Quantitative screening results across multiple categories
+- **candidates**: Selected investment candidates with sector allocation
+- **events**: Event-driven triggers for analysis and alerts
+- **portfolio_decisions**: Deterministic portfolio engine trade proposals
+- **portfolio_reviews**: LLM-powered portfolio review summaries
+- **stock_universe**: Complete stock universe with ratings and sector information
 
-### Integration Points
-- Seamlessly integrates with the existing ingestion engine and database layer
-- Provides clean API for programmatic pipeline execution
-- Supports both interactive and scheduled execution modes
-- Includes comprehensive logging and monitoring capabilities
-- **New**: Google Finance API integration for real-time market data
-- **New**: Portfolio management system integration for investment tracking
-- **New**: Event-driven architecture for real-time processing
-- **Performance**: Optimized execution patterns for improved throughput
-
-**Section sources**
-- [data_eng/pipeline.py](file://data_eng/pipeline.py)
-
-## Enhanced Data Ingestion Pipeline
-The ingestion pipeline has been significantly enhanced with 430+ new lines of functionality, providing:
-
-### Advanced Data Processing Features
-- **Multi-source Support**: Enhanced ability to handle multiple data sources simultaneously including Google Finance
-- **Configurable Transformation Rules**: Flexible transformation pipeline with custom validators
-- **Batch Optimization**: Intelligent batching strategies for optimal performance
-- **Error Recovery**: Sophisticated error handling with automatic retry mechanisms
-- **Progress Tracking**: Real-time progress monitoring and reporting
-- **New**: Improved data flow between news ingestion, analysis, and summarization components
-- **New**: Portfolio data integration for comprehensive investment tracking
-- **Performance**: Optimized batch processing and memory management for improved throughput
-
-### Production-Ready Enhancements
-- **Memory Management**: Optimized memory usage for large datasets
-- **Concurrency Control**: Thread-safe operations with proper synchronization
-- **Logging Framework**: Comprehensive logging with structured output
-- **Metrics Collection**: Performance metrics and operational statistics
-
-### Pipeline Integration
-The enhanced ingestion pipeline now works seamlessly with the new pipeline orchestrator, providing automated execution of complex data processing workflows for stock market data with specialized news data processing capabilities, Google Finance integration, and portfolio management support.
-
-**Section sources**
-- [data_eng/ingest.py](file://data_eng/ingest.py)
-- [data_eng/pipeline.py](file://data_eng/pipeline.py)
-- [data_eng/gfinance.py](file://data_eng/gfinance.py)
-
-## Google Finance Integration
-**New Section** - Comprehensive coverage of Google Finance API integration
-
-The new gfinance.py module provides seamless integration with Google Finance API for accessing real-time and historical financial market data. This component enables the data engineering pipeline to automatically fetch stock prices, market information, and financial metrics.
-
-### Key Features
-- **Real-time Price Fetching**: Live stock quotes and current market prices
-- **Historical Data Access**: Time-series price data for backtesting and analysis
-- **Market Information**: Company fundamentals, market cap, and trading volumes
-- **Symbol Validation**: Ticker symbol validation and normalization
-- **Rate Limiting**: Built-in rate limiting and API quota management
-- **Error Handling**: Robust error handling for network failures and API limitations
-
-### Data Sources Supported
-- **Stock Prices**: Current and historical price data
-- **Market Statistics**: Volume, market cap, and trading metrics
-- **Company Information**: Basic company fundamentals and descriptions
-- **Index Data**: Major market index information and performance
-
-### Integration with Pipeline
-- Automatically integrated into the main ingestion pipeline
-- Configurable data refresh intervals and caching strategies
-- Fallback mechanisms for API failures and rate limits
-- Comprehensive logging and monitoring of API usage
-
-```mermaid
-flowchart TD
-Start(["Start Google Finance Integration"]) --> Validate["Validate Symbol"]
-Validate --> FetchData["Fetch Market Data"]
-FetchData --> ProcessData["Process & Transform"]
-ProcessData --> CacheData["Cache Results"]
-CacheData --> StoreData["Store in Database"]
-StoreData --> Success{"Success?"}
-Success --> |Yes| Complete["Complete"]
-Success --> |No| Retry["Retry with Backoff"]
-Retry --> FetchData
-Complete --> End(["End"])
-```
-
-**Diagram sources**
-- [data_eng/gfinance.py](file://data_eng/gfinance.py)
-
-**Section sources**
-- [data_eng/gfinance.py](file://data_eng/gfinance.py)
-
-## DuckDB Vendor Support
-**New Section** - Enhanced DuckDB database vendor implementation
-
-The new duckdb_vendor.py module provides specialized support for DuckDB database with optimized query execution and analytical capabilities. This vendor implementation enhances the database layer's ability to handle complex analytical queries and large-scale financial data processing.
-
-### Key Capabilities
-- **Vectorized Query Execution**: High-performance analytical queries using vectorized processing
-- **Columnar Storage**: Optimized storage format for time-series financial data
-- **Memory Management**: Efficient memory usage for large datasets with automatic cleanup
-- **Pandas Integration**: Seamless data exchange with pandas DataFrames for analysis
-- **Analytical Functions**: Built-in statistical and mathematical functions for financial analysis
+### Schema Features
+- **Primary Keys**: Composite keys for efficient querying and data integrity
+- **Data Types**: Optimized data types for financial data (DOUBLE, BIGINT, VARCHAR)
+- **Indexes**: Strategic indexing for performance optimization
+- **Constraints**: Data validation through NOT NULL and CHECK constraints
+- **Migration Support**: ALTER TABLE statements for safe schema evolution
+- **Corporate Actions**: Dividend and stock split tracking for accurate price history
 
 ### Performance Optimizations
-- **Query Vectorization**: Automatic vectorization of analytical queries
-- **Memory Pooling**: Efficient memory allocation and garbage collection
-- **Parallel Processing**: Multi-threaded query execution for improved performance
-- **Compression**: Advanced compression techniques for reduced storage footprint
-
-### Integration Benefits
-- **Enhanced Analytics**: Advanced analytical capabilities for financial data
-- **Improved Performance**: Significant speedup for complex queries and aggregations
-- **Scalability**: Better handling of large datasets and concurrent operations
-- **Compatibility**: Full compatibility with existing database abstractions
-
-```mermaid
-classDiagram
-class DuckDBVendor {
-+connect_to_duckdb()
-+execute_vectorized_query(sql)
-+optimize_columnar_storage()
-+manage_memory_pool()
-+integrate_with_pandas()
-+enable_parallel_processing()
-+compress_data_stores()
-}
-```
-
-**Diagram sources**
-- [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
-
-**Section sources**
-- [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
-
-## Advanced Database Operations
-The database layer has been expanded with 63 additional lines of functionality, introducing:
-
-### Enhanced Connection Management
-- **Connection Pooling**: Efficient connection reuse and management
-- **Health Checks**: Automatic connection health monitoring
-- **Failover Support**: Graceful handling of connection failures
-- **Performance Monitoring**: Query execution time tracking
-
-### Advanced Transaction Handling
-- **Nested Transactions**: Support for complex transaction scenarios
-- **Automatic Rollback**: Intelligent error detection and recovery
-- **Transaction Logging**: Complete audit trail of database operations
-- **Optimization Strategies**: Query optimization and indexing recommendations
-
-### Improved Query Execution
-- **Parameter Binding**: Secure parameterized queries
-- **Result Mapping**: Automatic type conversion and validation
-- **Batch Operations**: Optimized bulk insert/update operations
-- **Query Caching**: Intelligent caching for repeated operations
-
-### **New Schema Support**
-- **Trading Configurations**: Enhanced schema for storing and managing trading parameters and strategies
-- **News Metadata**: Structured storage for news article metadata, sentiment analysis, and categorization
-- **User Preferences**: Personalized user settings and configuration management
-- **Schema Migration**: Automated migration support for evolving data models
-- **New**: Google Finance data schemas for market information and price history
-- **New**: DuckDB-specific optimizations for analytical workloads
-- **New**: Portfolio management schemas for investment tracking and performance metrics
-- **New**: Event-driven architecture schemas for real-time data processing
-- **New**: Screening and candidate selection schemas for investment analysis
+- **Columnar Storage**: DuckDB's columnar storage for analytical queries
+- **Partitioning**: Logical partitioning by ticker and date for efficient range queries
+- **Compression**: Automatic compression for reduced storage footprint
+- **Query Optimization**: Optimized query patterns for common financial analysis tasks
+- **Connection Pooling**: Efficient connection management for concurrent access
 
 **Section sources**
 - [data_eng/db.py](file://data_eng/db.py)
-- [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
 
 ## Command-Line Interface Capabilities
-The enhanced CLI provides comprehensive control over data ingestion operations and pipeline orchestration:
+**Updated** - Comprehensive CLI with pipeline orchestration and advanced features
+
+The enhanced CLI provides comprehensive control over data ingestion operations and pipeline orchestration with extensive command options.
 
 ### Available Commands
 - **Full Ingestion**: `python -m data_eng --full` for complete data processing
@@ -963,10 +1202,19 @@ The enhanced CLI provides comprehensive control over data ingestion operations a
 - **Incremental Updates**: `python -m data_eng --incremental` for targeted updates
 - **Dry Run Mode**: `python -m data_eng --dry-run` for validation without execution
 - **Configuration Management**: `python -m data_eng --config <path>` for custom configurations
-- **New**: Google Finance specific commands for market data fetching
-- **New**: DuckDB optimization commands for analytical queries
-- **New**: Portfolio management commands for investment tracking and analysis
-- **New**: Screening and candidate selection commands for investment analysis
+- **Night Pipeline**: `python -m data_eng --night` for bulk enrichment operations
+- **Daily Pipeline**: `python -m data_eng --daily` for comprehensive daily updates
+- **Smart Daily**: `python -m data_eng --daily-smart` for staleness-optimized daily runs
+- **Universe Build**: `python -m data_eng --universe` for complete stock universe creation
+- **Universe Group**: `python -m data_eng --universe-group N` for sector group processing
+- **Screening**: `python -m data_eng --screen` for quantitative stock screening
+- **Candidate Selection**: `python -m data_eng --candidates` for investment candidate selection
+- **Event Detection**: `python -m data_eng --events` for market event analysis
+- **Portfolio Engine**: `python -m data_eng --portfolio` for rule-based portfolio decisions
+- **Portfolio Review**: `python -m data_eng --review` for LLM-powered portfolio analysis
+- **Enrichment**: `python -m data_eng --enrich` for rolling batch data enrichment
+- **Batch Processing**: `python -m data_eng --batch` for price data batch downloads
+- **Universe Batch**: `python -m data_eng --batch-universe` for universe-wide price updates
 
 ### Configuration Options
 - **Source Configuration**: Multiple input format support (CSV, JSON, Parquet) with Google Finance integration
@@ -974,15 +1222,16 @@ The enhanced CLI provides comprehensive control over data ingestion operations a
 - **Processing Modes**: Various processing strategies for different use cases
 - **Pipeline Scheduling**: Automated execution with cron-like scheduling
 - **Monitoring Options**: Health checks and status reporting
-- **New**: Portfolio configuration options for investment management
-- **New**: Event-driven processing configuration for real-time operations
-- **New**: Screening criteria configuration for investment analysis
+- **Enrichment Parameters**: Sector filtering, rating filters, and batch limits
+- **Portfolio Configuration**: Capital allocation, risk parameters, and constraint settings
+- **Event Thresholds**: Customizable thresholds for price moves and technical signals
 
 ### Environment Integration
 - **Environment Variables**: Support for environment-based configuration
 - **Secret Management**: Secure handling of sensitive credentials
 - **Deployment Scripts**: Ready-to-use scripts for automated deployments
 - **Pipeline Triggers**: Event-driven pipeline execution based on data availability
+- **Logging Configuration**: Configurable log levels and output formats
 
 **Section sources**
 - [data_eng/__main__.py](file://data_eng/__main__.py)
@@ -1071,7 +1320,9 @@ The data processing module provides extensive financial market analysis capabili
 - [dump/report_generator.py](file://dump/report_generator.py)
 
 ## Production Deployment Features
-The enhanced module includes several production-ready features:
+**Updated** - Enhanced production readiness with comprehensive monitoring and scalability
+
+The enhanced module includes several production-ready features with significant improvements for enterprise deployment.
 
 ### Reliability and Resilience
 - **Graceful Degradation**: System continues operating even with partial failures
@@ -1079,10 +1330,9 @@ The enhanced module includes several production-ready features:
 - **Health Check Endpoints**: Comprehensive system health monitoring
 - **Automatic Recovery**: Self-healing capabilities for common failure scenarios
 - **Pipeline Retry Logic**: Automated re-execution of failed pipeline stages
-- **New**: Google Finance API fallback mechanisms and rate limit handling
-- **New**: Data processing module error handling and recovery mechanisms
-- **New**: Portfolio management system resilience and recovery capabilities
-- **New**: Event-driven architecture fault tolerance and recovery mechanisms
+- **Enrichment Retry**: Sophisticated retry mechanisms for enrichment operations
+- **Event Queue Resilience**: Guaranteed message delivery with dead letter queues
+- **Database Failover**: Automatic failover to backup databases
 
 ### Scalability and Performance
 - **Horizontal Scaling**: Support for distributed processing
@@ -1090,136 +1340,193 @@ The enhanced module includes several production-ready features:
 - **Load Balancing**: Even distribution of processing workload
 - **Caching Strategies**: Intelligent data caching for improved performance
 - **Pipeline Parallelism**: Concurrent execution of independent pipeline stages
-- **New**: DuckDB vectorized processing for enhanced analytical performance
-- **New**: Data processing module optimization for large-scale financial data
-- **New**: Portfolio management system scalability for large investment portfolios
-- **New**: Event-driven architecture scalability for high-volume market data
-- **Performance**: Optimized processing speed through improved batch handling and memory management
+- **Batch Processing**: Optimized batch operations for large datasets
+- **Smart Scheduling**: Staleness-based optimization to reduce redundant API calls
+- **Technical Indicators**: Dedicated table for optimized technical analysis queries
+- **DuckDB Vectorization**: High-performance analytical query execution
+- **Memory Management**: Efficient memory usage with streaming capabilities
 
 ### Monitoring and Observability
-- **Structured Logging**: Machine-readable log output
-- **Metrics Export**: Prometheus-compatible metrics
-- **Trace Propagation**: Distributed tracing support
-- **Alerting Integration**: Automated alerting for critical issues
+- **Structured Logging**: Machine-readable log output with correlation IDs
+- **Metrics Export**: Prometheus-compatible metrics for system monitoring
+- **Trace Propagation**: Distributed tracing support for request tracking
+- **Alerting Integration**: Automated alerting for critical issues and anomalies
 - **Pipeline Dashboards**: Real-time visualization of pipeline execution
-- **New**: Google Finance API usage monitoring and quota tracking
-- **New**: Data processing module performance monitoring and health checks
-- **New**: Portfolio management system monitoring and performance tracking
-- **New**: Event-driven architecture monitoring and processing metrics
+- **Performance Analytics**: Detailed performance metrics and bottleneck identification
+- **Enrichment Monitoring**: Tracking of enrichment progress and success rates
+- **Event Processing Metrics**: Real-time event processing statistics
+- **Portfolio Performance**: Portfolio-level performance and risk metrics
+
+### Security and Compliance
+- **Input Validation**: Comprehensive input validation and sanitization
+- **SQL Injection Prevention**: Parameterized queries throughout the system
+- **Access Control**: Role-based access control for sensitive operations
+- **Audit Logging**: Complete audit trail of all data modifications
+- **Data Encryption**: Encryption at rest and in transit for sensitive data
+- **Compliance Reporting**: Automated compliance reporting and data retention
+- **Privacy Controls**: GDPR and privacy regulation compliance features
+
+### Deployment Automation
+- **Container Support**: Docker containerization for consistent deployment
+- **Configuration Management**: Environment-based configuration with secrets management
+- **Health Checks**: Automated health checks and readiness probes
+- **Rolling Updates**: Zero-downtime deployment with rolling updates
+- **Backup and Recovery**: Automated backup and disaster recovery procedures
+- **Infrastructure as Code**: Terraform and Ansible scripts for infrastructure management
+
+**Section sources**
+- [data_eng/pipeline.py](file://data_eng/pipeline.py)
+- [data_eng/enrich.py](file://data_eng/enrich.py)
+- [data_eng/events.py](file://data_eng/events.py)
+- [data_eng/db.py](file://data_eng/db.py)
 
 ## Dependency Analysis
-Internal dependencies:
-- __main__.py depends on pipeline.py for orchestration with enhanced CLI features
-- pipeline.py depends on ingest.py for data processing workflows
-- ingest.py depends on db.py for persistence with advanced database operations
-- **New**: ingest.py depends on gfinance.py for Google Finance data sourcing
-- **New**: db.py depends on duckdb_vendor.py for DuckDB-specific optimizations
-- **New**: pipeline.py depends on dump/ modules for data processing and reporting
-- **New**: portfolio_engine.py depends on candidates.py for investment selection
-- **New**: portfolio_engine.py depends on events.py for real-time processing
-- **New**: portfolio_engine.py depends on screener.py for advanced analysis
-- **New**: portfolio_engine.py depends on universe.py for investment universe management
-- **New**: portfolio_engine.py depends on portfolio_review.py for performance analysis
-- __init__.py may re-export selected symbols from all modules
+**Updated** - Enhanced dependency structure with new components
 
-External dependencies:
-- Database driver (e.g., psycopg2, sqlite3, duckdb) used via db.py with enhanced connectivity
-- I/O libraries for reading sources (CSV, JSON, Parquet, etc.) with improved performance
-- Logging and configuration frameworks with comprehensive monitoring
-- Scheduling libraries for automated pipeline execution
-- **New**: Google Finance API client libraries for market data access
-- **New**: Pandas and NumPy for data analysis and manipulation
-- **New**: Web scraping libraries for financial data collection
-- **New**: Report generation libraries for creating financial analysis reports
-- **New**: Event processing libraries for real-time market data handling
-- **New**: Portfolio management libraries for investment tracking and analysis
+Internal dependencies have been significantly expanded with the addition of new modules and enhanced interconnections.
 
+### Core Dependencies
+- **__main__.py** depends on pipeline.py for orchestration with enhanced CLI features
+- **pipeline.py** depends on ingest.py for data processing workflows with night/day separation
+- **ingest.py** depends on db.py for persistence with advanced database operations
+- **enrich.py** depends on ingest.py for data ingestion and db.py for database operations
+- **gfinance.py** depends on db.py for data storage and cache management
+- **portfolio_engine.py** depends on db.py for data access and decision persistence
+- **candidates.py** depends on db.py for screening data and universe information
+- **events.py** depends on db.py for event detection and state management
+- **screener.py** depends on db.py for multi-dimensional data analysis
+- **universe.py** depends on db.py for universe management and sector data
+- **portfolio_review.py** depends on db.py for decision data and LLM integration
+
+### External Dependencies
+- **Database Driver**: DuckDB with optimized analytical query execution
+- **Financial Data**: yfinance library for market data and company information
+- **Web Scraping**: BeautifulSoup for web page parsing and data extraction
+- **Data Processing**: Pandas and NumPy for numerical computations and data manipulation
+- **API Integration**: Requests library for HTTP API calls and rate limiting
+- **LLM Integration**: Local llama.cpp server for AI-powered analysis and reviews
+- **Configuration**: Standard Python libraries for configuration and logging
+- **File I/O**: JSON and CSV processing for data import/export operations
+
+### Dependency Graph
 ```mermaid
 graph TB
 Main["__main__.py"] --> Pipeline["pipeline.py"]
 Pipeline --> Ingest["ingest.py"]
+Pipeline --> Enrich["enrich.py"]
+Pipeline --> GFinance["gfinance.py"]
+Pipeline --> Portfolio["portfolio_engine.py"]
+Pipeline --> Candidates["candidates.py"]
+Pipeline --> Events["events.py"]
+Pipeline --> Screener["screener.py"]
+Pipeline --> Universe["universe.py"]
+Pipeline --> Review["portfolio_review.py"]
 Ingest --> DB["db.py"]
-Ingest --> GF["gfinance.py"]
-DB --> DuckDB["duckdb_vendor.py"]
-Pipeline --> Dump["dump/*"]
-Dump --> DataUtils["data_utils.py"]
-Dump --> ScrapePrices["scrape_stock_prices.py"]
-Dump --> ScrapeSector["scrape_sector.py"]
-Dump --> ReportGen["report_generator.py"]
-Init["__init__.py"] --> Pipeline
-Init --> Ingest
-Init --> DB
-Main --> Pipeline
-Main --> DB
-GF --> DB
-Portfolio["portfolio_engine.py"] --> Candidates["candidates.py"]
-Portfolio --> Events["events.py"]
-Portfolio --> Screener["screener.py"]
-Portfolio --> Universe["universe.py"]
-Portfolio --> Review["portfolio_review.py"]
+Enrich --> Ingest
+Enrich --> DB
+GFinance --> DB
 Portfolio --> DB
+Candidates --> DB
+Events --> DB
+Screener --> DB
+Universe --> DB
+Review --> DB
+DB --> DuckDB["DuckDB Engine"]
+Ingest --> YFinance["yfinance Library"]
+Ingest --> BeautifulSoup["BeautifulSoup"]
+Review --> LLM["Local LLM Server"]
 ```
 
 **Diagram sources**
 - [data_eng/__main__.py](file://data_eng/__main__.py)
 - [data_eng/pipeline.py](file://data_eng/pipeline.py)
 - [data_eng/ingest.py](file://data_eng/ingest.py)
-- [data_eng/db.py](file://data_eng/db.py)
+- [data_eng/enrich.py](file://data_eng/enrich.py)
 - [data_eng/gfinance.py](file://data_eng/gfinance.py)
-- [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
-- [data_eng/__init__.py](file://data_eng/__init__.py)
-- [dump/data_utils.py](file://dump/data_utils.py)
-- [dump/scrape_stock_prices.py](file://dump/scrape_stock_prices.py)
-- [dump/scrape_sector.py](file://dump/scrape_sector.py)
-- [dump/report_generator.py](file://dump/report_generator.py)
 - [data_eng/portfolio_engine.py](file://data_eng/portfolio_engine.py)
 - [data_eng/candidates.py](file://data_eng/candidates.py)
 - [data_eng/events.py](file://data_eng/events.py)
 - [data_eng/screener.py](file://data_eng/screener.py)
 - [data_eng/universe.py](file://data_eng/universe.py)
 - [data_eng/portfolio_review.py](file://data_eng/portfolio_review.py)
+- [data_eng/db.py](file://data_eng/db.py)
 
 **Section sources**
 - [data_eng/__main__.py](file://data_eng/__main__.py)
 - [data_eng/pipeline.py](file://data_eng/pipeline.py)
 - [data_eng/ingest.py](file://data_eng/ingest.py)
-- [data_eng/db.py](file://data_eng/db.py)
+- [data_eng/enrich.py](file://data_eng/enrich.py)
 - [data_eng/gfinance.py](file://data_eng/gfinance.py)
-- [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
-- [data_eng/__init__.py](file://data_eng/__init__.py)
-- [dump/data_utils.py](file://dump/data_utils.py)
-- [dump/scrape_stock_prices.py](file://dump/scrape_stock_prices.py)
-- [dump/scrape_sector.py](file://dump/scrape_sector.py)
-- [dump/report_generator.py](file://dump/report_generator.py)
 - [data_eng/portfolio_engine.py](file://data_eng/portfolio_engine.py)
 - [data_eng/candidates.py](file://data_eng/candidates.py)
 - [data_eng/events.py](file://data_eng/events.py)
 - [data_eng/screener.py](file://data_eng/screener.py)
 - [data_eng/universe.py](file://data_eng/universe.py)
 - [data_eng/portfolio_review.py](file://data_eng/portfolio_review.py)
+- [data_eng/db.py](file://data_eng/db.py)
 
 ## Performance Considerations
-- **Batch Sizes**: Tune batch size to balance memory usage and throughput with enhanced optimization
-- **Transactions**: Group writes into larger transactions to reduce overhead with improved transaction management
-- **Indexes**: Ensure target tables have appropriate indexes for upserts and queries with automatic index recommendations
-- **Connection Pooling**: Reuse connections where supported by the driver with intelligent pooling strategies
-- **Parallelism**: Consider parallel reads for large sources while maintaining order guarantees with enhanced concurrency control
-- **Schema Evolution**: Use migrations and backward-compatible transformations with automated schema validation
-- **Memory Management**: Optimize memory usage for large datasets with streaming capabilities
-- **I/O Optimization**: Implement efficient I/O patterns for high-throughput scenarios
-- **Pipeline Optimization**: Configure pipeline stage parallelism and resource allocation for optimal throughput
-- **Performance**: **Updated** - Recent optimizations have significantly improved processing speed through enhanced batch handling, memory management, and parallel execution strategies
-- **New**: Optimized data flow between news ingestion, analysis, and summarization components for improved performance
-- **New**: DuckDB vectorized query execution for analytical workloads
-- **New**: Google Finance API caching and rate limit optimization
-- **New**: Data processing module optimization for large-scale financial data analysis
-- **New**: Automated scraping performance tuning and rate limiting
-- **New**: Portfolio management system optimization for large investment portfolios
-- **New**: Event-driven architecture optimization for high-volume market data processing
-- **New**: Screening and candidate selection algorithm optimization for faster analysis
+**Updated** - Significant performance optimizations across all components
+
+The enhanced system includes numerous performance optimizations designed for high-throughput financial data processing.
+
+### Database Performance
+- **DuckDB Optimization**: Leveraging DuckDB's columnar storage and vectorized query execution
+- **Index Strategy**: Strategic indexing on ticker, date, and frequently queried columns
+- **Connection Pooling**: Efficient connection reuse and management
+- **Batch Operations**: Optimized batch inserts and updates for large datasets
+- **Query Optimization**: Complex queries optimized for analytical workloads
+- **Memory Management**: Efficient memory usage with streaming and pagination
+
+### Processing Performance
+- **Batch Processing**: Intelligent batching strategies for optimal throughput
+- **Parallel Execution**: Concurrent processing of independent operations
+- **Smart Scheduling**: Staleness-based scheduling to avoid redundant API calls
+- **Caching Strategies**: Multi-level caching for frequently accessed data
+- **Rate Limiting**: Intelligent API rate limiting with automatic backoff
+- **Memory Optimization**: Streaming processing for large datasets
+
+### Network Performance
+- **Connection Reuse**: Persistent connections for API calls
+- **Request Batching**: Consolidated API requests where possible
+- **Timeout Management**: Configurable timeouts with retry logic
+- **Compression**: Request/response compression for large datasets
+- **CDN Integration**: Cache-friendly endpoints for static data
+
+### System Performance
+- **Resource Monitoring**: Real-time monitoring of CPU, memory, and I/O usage
+- **Auto-scaling**: Horizontal scaling based on load and resource utilization
+- **Load Balancing**: Even distribution of processing workload
+- **Garbage Collection**: Optimized garbage collection for memory-intensive operations
+- **Thread Safety**: Thread-safe operations with proper synchronization
+
+### Specific Optimizations
+- **Technical Indicators**: Dedicated table with optimized queries for technical analysis
+- **Enrichment Batching**: Rolling batch processing with priority queuing
+- **Event Processing**: Efficient event detection with minimal database queries
+- **Portfolio Calculations**: Optimized portfolio analytics with cached intermediate results
+- **Screening Algorithms**: Vectorized calculations using NumPy and Pandas
+- **News Processing**: Efficient news aggregation with deduplication and caching
+
+### Monitoring and Tuning
+- **Performance Metrics**: Comprehensive metrics collection and analysis
+- **Bottleneck Identification**: Automated bottleneck detection and reporting
+- **Capacity Planning**: Proactive capacity planning based on growth trends
+- **Load Testing**: Regular load testing to validate performance assumptions
+- **Profiling**: Code profiling to identify optimization opportunities
+
+**Section sources**
+- [data_eng/pipeline.py](file://data_eng/pipeline.py)
+- [data_eng/enrich.py](file://data_eng/enrich.py)
+- [data_eng/ingest.py](file://data_eng/ingest.py)
+- [data_eng/db.py](file://data_eng/db.py)
 
 ## Troubleshooting Guide
-Common issues and resolutions:
+**Updated** - Comprehensive troubleshooting guide covering all new components
+
+Common issues and resolutions have been expanded to cover the new enrichment system, technical indicators, and enhanced pipeline architecture.
+
+### Common Issues and Resolutions
 - **Connection Failures**: Verify credentials, network access, and service availability with enhanced diagnostic tools
 - **Permission Errors**: Check database user privileges and table schemas with automated permission validation
 - **Data Validation Failures**: Inspect malformed records and adjust parsing rules with detailed error reporting
@@ -1228,48 +1535,54 @@ Common issues and resolutions:
 - **Performance Issues**: Analyze query performance and optimize bottlenecks with profiling tools
 - **Configuration Problems**: Validate configuration files and environment variables with syntax checking
 - **Pipeline Failures**: Check individual pipeline stage logs and dependency availability with stage-specific diagnostics
-- **New**: Schema migration issues with enhanced migration tools and validation
-- **New**: Google Finance API rate limiting and connection issues
-- **New**: DuckDB memory allocation and vectorization problems
-- **New**: Data processing module scraping failures and network connectivity issues
-- **New**: Report generation errors and template formatting problems
-- **New**: Portfolio management system errors and data consistency issues
-- **New**: Event-driven architecture message processing and routing problems
-- **New**: Screening algorithm performance and accuracy issues
 
-Diagnostic steps:
-- Enable verbose logging at ingestion, pipeline, and database layers with structured log analysis
-- Validate source data format and schema before ingestion with automated validation
-- Use dry-run mode to preview transformations and writes with detailed previews
-- Monitor transaction durations and lock contention with performance analytics
-- Check system resources and identify bottlenecks with resource monitoring
-- Review pipeline stage execution logs and error traces for failure diagnosis
-- **New**: Monitor news data flow between ingestion, analysis, and summarization components
-- **New**: Track Google Finance API usage and rate limit consumption
-- **New**: Analyze DuckDB query performance and memory usage patterns
-- **New**: Monitor data processing module scraping performance and error rates
-- **New**: Validate report generation templates and output formatting
-- **New**: Monitor portfolio management system performance and data consistency
-- **New**: Track event-driven architecture message processing and routing efficiency
-- **New**: Analyze screening algorithm performance and selection accuracy
+### New Component Issues
+- **Enrichment Failures**: Check API rate limits, watchlist file format, and eligibility criteria with detailed logging
+- **Technical Indicators**: Verify sufficient price data history and calculation parameters with validation checks
+- **Event Detection**: Validate threshold configurations and data availability with debug logging
+- **Portfolio Engine**: Check decision data consistency and rule parameter validity with validation tools
+- **Candidate Selection**: Verify screening data completeness and correlation calculation parameters
+- **Universe Management**: Check sector data availability and rating classifications with validation
+- **Portfolio Review**: Validate LLM server connectivity and prompt formatting with test endpoints
+
+### Diagnostic Steps
+- **Enable Verbose Logging**: Configure detailed logging at all pipeline stages with structured output
+- **Validate Data Sources**: Check source data format and schema before ingestion with automated validation
+- **Use Dry-Run Mode**: Preview transformations and writes with detailed previews and validation
+- **Monitor Transactions**: Track transaction durations and lock contention with performance analytics
+- **Check System Resources**: Monitor CPU, memory, disk, and network usage with resource monitoring
+- **Review Pipeline Logs**: Analyze pipeline stage execution logs and error traces for failure diagnosis
+- **Validate Database State**: Check table integrity, indexes, and data consistency with diagnostic queries
+- **Test API Connectivity**: Verify external API connectivity and rate limit status with test endpoints
+
+### Enrichment-Specific Diagnostics
+- **Watchlist Validation**: Verify watchlist.json format and ticker validity with validation tools
+- **Eligibility Query Testing**: Test eligibility queries with sample data and expected results
+- **API Rate Limit Monitoring**: Track API usage and rate limit consumption with monitoring dashboards
+- **Progress Tracking**: Monitor enrichment progress with checkpoint logging and status reports
+- **Error Analysis**: Analyze enrichment errors with detailed stack traces and context information
+
+### Performance Diagnostics
+- **Query Performance**: Use EXPLAIN ANALYZE for slow queries with execution plan analysis
+- **Memory Profiling**: Profile memory usage with memory profilers and leak detection
+- **CPU Profiling**: Identify CPU-intensive operations with CPU profilers and hot spot analysis
+- **I/O Monitoring**: Monitor disk and network I/O with performance counters and bandwidth monitoring
+- **Connection Pooling**: Analyze connection pool usage and optimize pool sizes with monitoring
+
+### Recovery Procedures
+- **Data Recovery**: Implement data recovery procedures with backup restoration and reconciliation
+- **Service Restart**: Plan service restart procedures with graceful shutdown and startup sequences
+- **Configuration Rollback**: Maintain configuration versioning with rollback capabilities
+- **State Recovery**: Implement state recovery for interrupted operations with checkpoint restoration
+- **Emergency Procedures**: Document emergency procedures for critical system failures
 
 **Section sources**
 - [data_eng/ingest.py](file://data_eng/ingest.py)
-- [data_eng/db.py](file://data_eng/db.py)
+- [data_eng/enrich.py](file://data_eng/enrich.py)
 - [data_eng/pipeline.py](file://data_eng/pipeline.py)
-- [data_eng/gfinance.py](file://data_eng/gfinance.py)
-- [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
-- [dump/data_utils.py](file://dump/data_utils.py)
-- [dump/scrape_stock_prices.py](file://dump/scrape_stock_prices.py)
-- [dump/scrape_sector.py](file://dump/scrape_sector.py)
-- [dump/report_generator.py](file://dump/report_generator.py)
-- [data_eng/portfolio_engine.py](file://data_eng/portfolio_engine.py)
-- [data_eng/candidates.py](file://data_eng/candidates.py)
+- [data_eng/db.py](file://data_eng/db.py)
 - [data_eng/events.py](file://data_eng/events.py)
-- [data_eng/screener.py](file://data_eng/screener.py)
-- [data_eng/universe.py](file://data_eng/universe.py)
-- [data_eng/portfolio_review.py](file://data_eng/portfolio_review.py)
+- [data_eng/portfolio_engine.py](file://data_eng/portfolio_engine.py)
 
 ## Conclusion
-The enhanced Data Engineering Module provides a clean separation between pipeline orchestration, ingestion, and persistence, enabling robust, configurable, and maintainable data pipelines for production deployments. With the addition of the new automated pipeline orchestrator (87 lines), significant enhancements to the ingestion pipeline (430+ new lines), expanded database operations (63 additional lines), comprehensive command-line interface capabilities, **new Google Finance integration module**, **enhanced DuckDB vendor support**, the **comprehensive data processing and reporting module in the dump/ directory**, and the **complete portfolio management system with advanced financial analysis capabilities**, it supports scalable and reliable data workflows for stock market data processing. **Updated**: The module now includes an enhanced database schema with 21 additional lines supporting trading configurations, news metadata, and user preferences, along with improved data flow between news ingestion, analysis, and summarization components (27 additional lines). **Performance Enhancement**: Recent updates have focused on optimizing processing speed through improved batch handling, memory management, and parallel execution strategies in the pipeline. **New Capabilities**: The dump/ directory provides complete data processing and reporting functionality including stock price scraping, sector analysis, and automated report generation for comprehensive financial market analysis. **Major Architectural Enhancement**: The complete overhaul of the data engineering pipeline introduces a comprehensive portfolio management system (portfolio_engine.py), candidate selection logic (candidates.py), event-driven architecture (events.py), advanced screening capabilities (screener.py), investment universe management (universe.py), and portfolio review functionality (portfolio_review.py). The module now includes production-ready features such as automated workflow execution, advanced error handling, performance optimization, monitoring capabilities, deployment automation, Google Finance API integration, DuckDB analytical capabilities, comprehensive financial market analysis tools, complete portfolio management system, event-driven real-time processing, and sophisticated investment analysis capabilities. Future enhancements can include advanced error recovery, richer metrics, additional source connectors, machine learning integration for intelligent data processing, expanded pipeline orchestration capabilities, enhanced real-time data streaming capabilities, advanced financial modeling capabilities, and continued optimization of the portfolio management and screening systems.
-</docs>
+The enhanced Data Engineering Module provides a clean separation between pipeline orchestration, ingestion, and persistence, enabling robust, configurable, and maintainable data pipelines for production deployments. With the addition of the new sophisticated enrichment system (254 lines), significant enhancements to the pipeline architecture (346 lines with night/day separation), comprehensive technical indicators migration, expanded database operations (279 lines with enhanced schema), comprehensive command-line interface capabilities, **new Google Finance integration module**, **enhanced DuckDB vendor support**, the **comprehensive data processing and reporting module in the dump/ directory**, and the **complete portfolio management system with advanced financial analysis capabilities**, it supports scalable and reliable data workflows for stock market data processing. **Updated**: The module now includes a sophisticated enrichment system with rolling batch processing, smart scheduling for API rate limits, and specialized technical indicator computation. The system features night/day pipeline separation with staleness-based optimization, comprehensive database schema supporting trading configurations, news metadata, user preferences, technical indicators, and portfolio management. **Performance Enhancement**: Recent updates have focused on optimizing processing speed through improved batch handling, memory management, parallel execution strategies, and smart scheduling. **New Capabilities**: The enrichment system provides rolling batch processing with watchlist prioritization, the technical indicators migration optimizes database performance, and the enhanced CLI provides comprehensive pipeline orchestration. **Major Architectural Enhancement**: The complete overhaul introduces sophisticated enrichment with smart scheduling, dual pipeline architecture with night/day separation, technical indicators migration to dedicated tables, comprehensive portfolio management system, candidate selection logic, event-driven architecture, advanced screening capabilities, investment universe management, and portfolio review functionality. The module now includes production-ready features such as automated workflow execution, advanced error handling, performance optimization, monitoring capabilities, deployment automation, Google Finance API integration, DuckDB analytical capabilities, comprehensive financial market analysis tools, complete portfolio management system, event-driven real-time processing, sophisticated investment analysis capabilities, and intelligent data enrichment with rate limit management. Future enhancements can include advanced error recovery, richer metrics, additional source connectors, machine learning integration for intelligent data processing, expanded pipeline orchestration capabilities, enhanced real-time data streaming capabilities, advanced financial modeling capabilities, continued optimization of the enrichment and screening systems, and integration with additional financial data providers.

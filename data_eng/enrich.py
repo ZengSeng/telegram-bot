@@ -1,27 +1,59 @@
-"""Bulk fundamentals enrichment with rolling-N scheduling.
+"""Bulk enrichment with priority-ordered scheduling.
 
-Loads fundamentals for universe tickers gated by rating (Buy/Strong Buy)
-and watchlist membership. Processes N tickers per run, prioritizing
-never-loaded and oldest-loaded first. This spreads the weekly refresh
-across daily runs instead of one big staleness wave.
+Processes ALL universe tickers (any rating), ordered by:
+1. Watchlist membership (always first)
+2. Rating priority: Strong Buy > Buy > Hold > Sell > Underperform > NULL/other
+3. Sector priority: technology > industrials > consumer-defensive > healthcare
+   > financial-services > consumer-cyclical > energy > communication-services
+   > utilities > basic-materials > real-estate > unknown
+4. Data staleness: oldest-fetched first (never-fetched first)
+
+This spreads the refresh across runs instead of one big staleness wave.
 """
 
 import logging
 import time
 from pathlib import Path
 
-from .db import get_connection
+from .db import SKIP_ATTEMPT_THRESHOLD, SKIP_RETRY_DAYS, clear_miss, get_connection, record_miss
 from .ingest import API_PAUSE, ingest_fundamentals, ingest_analyst_targets, ingest_enriched
 
 log = logging.getLogger(__name__)
-
-# Default ratings eligible for enrichment
-DEFAULT_RATINGS = ("Strong Buy", "Buy")
 
 # Default batch size per run
 DEFAULT_LIMIT = 100
 
 WATCHLIST_FILE = Path(__file__).parent.parent / "data" / "watchlist.json"
+
+# Rating priority (lower = processed first); NULL/NaN/unmatched ratings last
+RATING_PRIORITY_SQL = """
+    CASE
+        WHEN LOWER(e.rating) = 'strong buy' THEN 1
+        WHEN LOWER(e.rating) = 'buy' THEN 2
+        WHEN LOWER(e.rating) = 'hold' THEN 3
+        WHEN LOWER(e.rating) = 'sell' THEN 4
+        WHEN LOWER(e.rating) = 'underperform' THEN 5
+        ELSE 6
+    END
+"""
+
+# Sector priority (lower = processed first); unknown/unmatched sectors last
+SECTOR_PRIORITY_SQL = """
+    CASE LOWER(e.sector)
+        WHEN 'technology' THEN 1
+        WHEN 'industrials' THEN 2
+        WHEN 'consumer-defensive' THEN 3
+        WHEN 'healthcare' THEN 4
+        WHEN 'financial-services' THEN 5
+        WHEN 'consumer-cyclical' THEN 6
+        WHEN 'energy' THEN 7
+        WHEN 'communication-services' THEN 8
+        WHEN 'utilities' THEN 9
+        WHEN 'basic-materials' THEN 10
+        WHEN 'real-estate' THEN 11
+        ELSE 12
+    END
+"""
 
 
 def _load_watchlist() -> list[str]:
@@ -35,60 +67,127 @@ def _load_watchlist() -> list[str]:
     return []
 
 
+# ---------------------------------------------------------------------------
+# Priority query builder
+# ---------------------------------------------------------------------------
+
+
+def _skip_condition_sql(skip_source: str | None, skip_retry_days: int) -> tuple[str, list]:
+    """Build a NOT EXISTS filter excluding no-data tickers within retry window."""
+    if not skip_source:
+        return "1=1", []
+    sql = f"""NOT EXISTS (
+            SELECT 1 FROM skip_tickers s
+            WHERE s.ticker = e.ticker AND s.source = ?
+              AND s.attempts >= {SKIP_ATTEMPT_THRESHOLD}
+              AND s.last_attempt >= CURRENT_DATE - {int(skip_retry_days)}
+        )"""
+    return sql, [skip_source]
+
+
+def _build_priority_query(
+    target_table: str,
+    watchlist: list[str],
+    sector: str | None,
+    limit: int,
+    stale_days: int | None = None,
+    skip_source: str | None = None,
+    skip_retry_days: int = SKIP_RETRY_DAYS,
+    date_col: str = "date_fetched",
+) -> tuple[str, list]:
+    """Build a priority-ordered query for bulk enrichment.
+
+    All universe tickers are eligible (any rating). Ordering:
+    watchlist first, then rating priority, sector priority, staleness.
+
+    Args:
+        stale_days: If set, exclude tickers whose newest row is fresher than
+            this many days (never-loaded tickers always stay eligible). This
+            stops re-loading data that was just refreshed. None = no filter.
+        skip_source: If set, exclude tickers recorded in skip_tickers for this
+            source with >= SKIP_ATTEMPT_THRESHOLD consecutive empty results,
+            until skip_retry_days have passed since the last attempt.
+        skip_retry_days: How long a no-data ticker stays skipped.
+        date_col: Freshness column of target_table (date_fetched for the
+            enrichment tables, date for trading_agent_decisions).
+
+    Returns (query, params) ready for conn.execute().
+    """
+    watchlist_ph = ", ".join(["?"] * len(watchlist)) if watchlist else "'__none__'"
+
+    conditions = []
+    params: list = []
+    if sector:
+        conditions.append("LOWER(e.sector) = LOWER(?)")
+        params.append(sector)
+    if stale_days is not None:
+        # Keep only stale (older than stale_days) or never-loaded tickers.
+        conditions.append(
+            f"(f.date_fetched IS NULL OR f.date_fetched < CURRENT_DATE - {int(stale_days)})"
+        )
+    skip_sql, skip_params = _skip_condition_sql(skip_source, skip_retry_days)
+    conditions.append(skip_sql)
+    params.extend(skip_params)
+
+    where_clause = " AND ".join(conditions)
+
+    query = f"""
+        SELECT e.ticker, f.date_fetched
+        FROM stock_universe e
+        LEFT JOIN (
+            SELECT ticker, MAX({date_col}) AS date_fetched
+            FROM {target_table}
+            GROUP BY ticker
+        ) f ON e.ticker = f.ticker
+        WHERE {where_clause}
+        ORDER BY
+            CASE WHEN e.ticker IN ({watchlist_ph}) THEN 0 ELSE 1 END,
+            {RATING_PRIORITY_SQL},
+            {SECTOR_PRIORITY_SQL},
+            f.date_fetched ASC NULLS FIRST
+        LIMIT ?
+    """
+
+    if watchlist:
+        params.extend(watchlist)
+    params.append(limit)
+
+    return query, params
+
+
+# ---------------------------------------------------------------------------
+# Fundamentals enrichment (night pipeline)
+# ---------------------------------------------------------------------------
+
+
 def run_enrich(
     sector: str | None = None,
-    ratings: tuple[str, ...] | None = None,
     limit: int = DEFAULT_LIMIT,
+    stale_days: int | None = None,
+    skip_source: str | None = "fundamentals",
+    skip_retry_days: int = SKIP_RETRY_DAYS,
 ) -> int:
-    """Enrich fundamentals for the next batch of eligible tickers.
+    """Enrich fundamentals for the next batch of tickers (all ratings).
 
     Args:
         sector: Filter by sector (e.g. "technology"). None = all sectors.
-        ratings: Eligible ratings. Defaults to ("Strong Buy", "Buy").
         limit: Max tickers to process this run.
+        stale_days: Skip tickers loaded within this many days. None = no skip
+            (manual CLI runs process up to limit regardless of freshness).
+        skip_source: skip_tickers source to filter/record. None disables
+            no-data skip tracking.
+        skip_retry_days: How long a no-data ticker stays skipped.
 
     Returns:
         Number of tickers successfully enriched.
     """
-    ratings = ratings or DEFAULT_RATINGS
     watchlist = _load_watchlist()
+    query, params = _build_priority_query(
+        "fundamentals", watchlist, sector, limit, stale_days,
+        skip_source, skip_retry_days,
+    )
 
-    # Build the eligible ticker query
     conn = get_connection()
-
-    # Get eligible tickers: watchlist (always) + universe tickers matching rating filter
-    # Then LEFT JOIN fundamentals to find stale/missing, ordered oldest-first
-    rating_placeholders = ", ".join(["?"] * len(ratings))
-
-    query = f"""
-        WITH eligible AS (
-            -- Watchlist tickers (always eligible, any rating)
-            SELECT ticker FROM stock_universe
-            WHERE ticker IN ({", ".join(["?"] * len(watchlist))})
-
-            UNION
-
-            -- Universe tickers matching rating filter
-            SELECT ticker FROM stock_universe
-            WHERE rating IN ({rating_placeholders})
-            {"AND LOWER(sector) = LOWER(?)" if sector else ""}
-        )
-        SELECT e.ticker, f.date_fetched
-        FROM eligible e
-        LEFT JOIN (
-            SELECT ticker, MAX(date_fetched) AS date_fetched
-            FROM fundamentals
-            GROUP BY ticker
-        ) f ON e.ticker = f.ticker
-        ORDER BY f.date_fetched ASC NULLS FIRST
-        LIMIT ?
-    """
-
-    params: list = list(watchlist) + list(ratings)
-    if sector:
-        params.append(sector)
-    params.append(limit)
-
     rows = conn.execute(query, params).fetchall()
     conn.close()
 
@@ -96,8 +195,8 @@ def run_enrich(
         log.info("Enrich: no eligible tickers to process.")
         return 0
 
-    log.info("Enrich: processing %d tickers (limit=%d, sector=%s, ratings=%s)",
-             len(rows), limit, sector or "all", ratings)
+    log.info("Enrich: processing %d tickers (limit=%d, sector=%s)",
+             len(rows), limit, sector or "all")
 
     success = 0
     for i, (ticker, last_fetched) in enumerate(rows, 1):
@@ -108,6 +207,11 @@ def run_enrich(
             ok = ingest_fundamentals(ticker)
             if ok:
                 success += 1
+                if skip_source:
+                    clear_miss(ticker, skip_source)
+            elif skip_source:
+                # Genuine "no data" (fetch errors raise instead)
+                record_miss(ticker, skip_source)
         except Exception as e:
             log.warning("Enrich: failed for %s: %s", ticker, e)
 
@@ -122,41 +226,29 @@ def run_enrich(
 
 
 # ---------------------------------------------------------------------------
-# Bulk analyst targets enrichment (night pipeline)
+# Bulk analyst targets (night pipeline)
 # ---------------------------------------------------------------------------
 
 
-def bulk_analyst_targets(watchlist: list[str], limit: int = 500) -> int:
-    """Bulk-ingest analyst targets: watchlist prioritized, then universe.
+def bulk_analyst_targets(
+    watchlist: list[str],
+    limit: int = 500,
+    stale_days: int | None = None,
+    skip_source: str | None = "analyst_targets",
+    skip_retry_days: int = SKIP_RETRY_DAYS,
+) -> int:
+    """Bulk-ingest analyst targets for the next batch of tickers (all ratings).
 
-    Processes up to `limit` tickers per run, ordered by oldest-fetched first.
-    Watchlist tickers are always eligible regardless of rating.
+    Ordered by: watchlist > rating priority > sector priority > staleness.
+    stale_days: skip tickers loaded within this many days (None = no skip).
+    skip_source: skip_tickers source to filter/record (None disables).
     """
+    query, params = _build_priority_query(
+        "analyst_targets", watchlist, None, limit, stale_days,
+        skip_source, skip_retry_days,
+    )
+
     conn = get_connection()
-
-    rating_placeholders = ", ".join(["?"] * len(DEFAULT_RATINGS))
-    query = f"""
-        WITH eligible AS (
-            SELECT ticker FROM stock_universe
-            WHERE ticker IN ({", ".join(["?" ] * len(watchlist))})
-
-            UNION
-
-            SELECT ticker FROM stock_universe
-            WHERE rating IN ({rating_placeholders})
-        )
-        SELECT e.ticker, a.date_fetched
-        FROM eligible e
-        LEFT JOIN (
-            SELECT ticker, MAX(date_fetched) AS date_fetched
-            FROM analyst_targets
-            GROUP BY ticker
-        ) a ON e.ticker = a.ticker
-        ORDER BY a.date_fetched ASC NULLS FIRST
-        LIMIT ?
-    """
-
-    params: list = list(watchlist) + list(DEFAULT_RATINGS) + [limit]
     rows = conn.execute(query, params).fetchall()
     conn.close()
 
@@ -175,6 +267,11 @@ def bulk_analyst_targets(watchlist: list[str], limit: int = 500) -> int:
             count = ingest_analyst_targets(ticker)
             if count > 0:
                 success += 1
+                if skip_source:
+                    clear_miss(ticker, skip_source)
+            elif skip_source:
+                # Fetched fine but nothing came back
+                record_miss(ticker, skip_source)
         except Exception as e:
             log.warning("Bulk analyst: failed for %s: %s", ticker, e)
 
@@ -188,41 +285,29 @@ def bulk_analyst_targets(watchlist: list[str], limit: int = 500) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Bulk ticker_enriched ingestion (night pipeline)
+# Bulk ticker_enriched (night pipeline)
 # ---------------------------------------------------------------------------
 
 
-def bulk_enriched(watchlist: list[str], limit: int = 500) -> int:
-    """Bulk-ingest ticker_enriched: watchlist prioritized, then universe.
+def bulk_enriched(
+    watchlist: list[str],
+    limit: int = 500,
+    stale_days: int | None = None,
+    skip_source: str | None = "ticker_enriched",
+    skip_retry_days: int = SKIP_RETRY_DAYS,
+) -> int:
+    """Bulk-ingest ticker_enriched for the next batch of tickers (all ratings).
 
-    Processes up to `limit` tickers per run, ordered by oldest-fetched first.
-    Watchlist tickers are always eligible regardless of rating.
+    Ordered by: watchlist > rating priority > sector priority > staleness.
+    stale_days: skip tickers loaded within this many days (None = no skip).
+    skip_source: skip_tickers source to filter/record (None disables).
     """
+    query, params = _build_priority_query(
+        "ticker_enriched", watchlist, None, limit, stale_days,
+        skip_source, skip_retry_days,
+    )
+
     conn = get_connection()
-
-    rating_placeholders = ", ".join(["?"] * len(DEFAULT_RATINGS))
-    query = f"""
-        WITH eligible AS (
-            SELECT ticker FROM stock_universe
-            WHERE ticker IN ({", ".join(["?" ] * len(watchlist))})
-
-            UNION
-
-            SELECT ticker FROM stock_universe
-            WHERE rating IN ({rating_placeholders})
-        )
-        SELECT e.ticker, t.date_fetched
-        FROM eligible e
-        LEFT JOIN (
-            SELECT ticker, MAX(date_fetched) AS date_fetched
-            FROM ticker_enriched
-            GROUP BY ticker
-        ) t ON e.ticker = t.ticker
-        ORDER BY t.date_fetched ASC NULLS FIRST
-        LIMIT ?
-    """
-
-    params: list = list(watchlist) + list(DEFAULT_RATINGS) + [limit]
     rows = conn.execute(query, params).fetchall()
     conn.close()
 
@@ -241,6 +326,11 @@ def bulk_enriched(watchlist: list[str], limit: int = 500) -> int:
             ok = ingest_enriched(ticker)
             if ok:
                 success += 1
+                if skip_source:
+                    clear_miss(ticker, skip_source)
+            elif skip_source:
+                # Fetched fine but nothing came back
+                record_miss(ticker, skip_source)
         except Exception as e:
             log.warning("Bulk enriched: failed for %s: %s", ticker, e)
 

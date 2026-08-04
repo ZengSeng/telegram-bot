@@ -12,7 +12,7 @@ import requests
 import yfinance as yf
 from bs4 import BeautifulSoup
 
-from .db import get_connection
+from .db import get_connection, get_skipped_tickers, record_miss, clear_miss
 
 log = logging.getLogger(__name__)
 
@@ -162,12 +162,9 @@ def ingest_fundamentals(ticker: str) -> bool:
     """Fetch company fundamentals snapshot. Returns success."""
     conn = get_connection()
     tk = yf.Ticker(ticker)
-    try:
-        info = tk.info
-    except Exception as e:
-        log.warning("Fundamentals fetch failed for %s: %s", ticker, e)
-        conn.close()
-        return False
+    # Let fetch errors propagate so callers can tell transient failures apart
+    # from genuine "no data" (returning False).
+    info = tk.info
 
     if not info or not info.get("longName"):
         log.warning("No fundamentals for %s", ticker)
@@ -667,6 +664,10 @@ def ingest_enriched(ticker: str) -> bool:
 
     row_data = {k: _to_native(v) for k, v in enrichment.items()}
 
+    if not any(v is not None for v in row_data.values()):
+        log.warning("No enrichment data for %s", ticker)
+        return False
+
     columns = ["ticker", "date_fetched"] + list(row_data.keys())
     placeholders = ", ".join(["?"] * len(columns))
     col_str = ", ".join(columns)
@@ -685,6 +686,14 @@ def ingest_enriched(ticker: str) -> bool:
 # ---------------------------------------------------------------------------
 # Batch price download for watchlist
 # ---------------------------------------------------------------------------
+
+# Chunking for bulk yf.download: one giant request for thousands of tickers
+# trips Yahoo's rate limiter. Smaller chunks with pauses between them keep
+# failed downloads near zero.
+PRICE_CHUNK_SIZE = 700
+PRICE_CHUNK_PAUSE = 5       # seconds between chunks
+PRICE_RETRY_PAUSE = 20      # seconds before the one retry pass for failures
+
 
 def batch_ingest_prices(tickers: list[str], lookback_days: int = 3 * 365) -> int:
     """Batch-download daily prices for multiple tickers using yf.download.
@@ -724,27 +733,80 @@ def batch_ingest_prices(tickers: list[str], lookback_days: int = 3 * 365) -> int
         conn.close()
         return 0
 
-    # Split: incremental (has data, recent start) vs new (no data, full backfill)
-    # Cap incremental lookback to 30 days to avoid one stale ticker dragging the batch
-    incremental_cutoff = today - timedelta(days=5)
-    incremental = [(t, s) for t, s in to_download if t in latest_dates and s >= incremental_cutoff]
-    backfill = [(t, s) for t, s in to_download if t not in latest_dates or s < incremental_cutoff]
+    # Split: incremental (has recent data, small top-up) vs stale/new (long backfill).
+    # A ticker is incremental if its latest stored row is within the last 30 days,
+    # keeping the shared batch start shallow. Older/new tickers backfill one at a
+    # time so one stale ticker doesn't drag the whole batch's lookback.
+    incremental_cutoff = today - timedelta(days=30)
+    incremental = [
+        (t, s) for t, s in to_download
+        if t in latest_dates and latest_dates[t] >= incremental_cutoff
+    ]
+    backfill = [
+        (t, s) for t, s in to_download
+        if t not in latest_dates or latest_dates[t] < incremental_cutoff
+    ]
 
     total_rows = 0
 
-    # --- Batch 1: incremental (fast, max 30-day lookback) ---
+    # --- Batch 1: incremental (fast, max 30-day lookback), chunked to avoid
+    #     Yahoo rate limits; failed tickers get one retry pass at the end.
+    missing: list[tuple] = []
     if incremental:
         inc_start = min(s for _, s in incremental)
-        inc_tickers = [t for t, _ in incremental]
-        log.info("Batch downloading %d tickers from %s (incremental)", len(inc_tickers), inc_start)
-        total_rows += _download_and_insert(conn, inc_tickers, inc_start, today, incremental)
+        chunks = [incremental[i:i + PRICE_CHUNK_SIZE]
+                  for i in range(0, len(incremental), PRICE_CHUNK_SIZE)]
+        log.info("Batch downloading %d tickers from %s (incremental, %d chunks)",
+                 len(incremental), inc_start, len(chunks))
+        for ci, chunk in enumerate(chunks):
+            if ci > 0 and PRICE_CHUNK_PAUSE:
+                time.sleep(PRICE_CHUNK_PAUSE)
+            chunk_tickers = [t for t, _ in chunk]
+            rows, chunk_missing = _download_and_insert(
+                conn, chunk_tickers, inc_start, today, chunk)
+            total_rows += rows
+            missing.extend(chunk_missing)
+
+        # One retry pass for tickers that came back empty (usually rate-limited)
+        if missing:
+            log.info("Retrying %d failed tickers after %ds pause",
+                     len(missing), PRICE_RETRY_PAUSE)
+            time.sleep(PRICE_RETRY_PAUSE)
+            for ri in range(0, len(missing), PRICE_CHUNK_SIZE):
+                if ri > 0 and PRICE_CHUNK_PAUSE:
+                    time.sleep(PRICE_CHUNK_PAUSE)
+                rchunk = missing[ri:ri + PRICE_CHUNK_SIZE]
+                rows, still_missing = _download_and_insert(
+                    conn, [t for t, _ in rchunk], inc_start, today, rchunk)
+                total_rows += rows
+                if still_missing:
+                    log.warning("Still no data after retry for %d tickers "
+                                "(will pick them up next run): %s",
+                                len(still_missing),
+                                ", ".join(t for t, _ in still_missing[:10]) + ("..." if len(still_missing) > 10 else ""))
 
     # --- Batch 2: backfill (new or very stale tickers, one at a time) ---
+    # Tickers that keep returning no data (delisted, dead SPACs) are tracked
+    # in skip_tickers so they stop burning a request every run.
+    if backfill:
+        skipped_prices = get_skipped_tickers("prices")
+        skipped_now = [(t, s) for t, s in backfill if t in skipped_prices]
+        backfill = [(t, s) for t, s in backfill if t not in skipped_prices]
+        if skipped_now:
+            log.info("Backfill: skipping %d known no-data tickers (%s)",
+                     len(skipped_now),
+                     ", ".join(t for t, _ in skipped_now[:10]) + ("..." if len(skipped_now) > 10 else ""))
+
     if backfill:
         log.info("Backfilling %d tickers individually (new or >30d stale)", len(backfill))
         for t, s in backfill:
             try:
-                total_rows += _download_and_insert(conn, [t], s, today, [(t, s)])
+                rows, _ = _download_and_insert(conn, [t], s, today, [(t, s)])
+                total_rows += rows
+                if rows > 0:
+                    clear_miss(t, "prices")
+                else:
+                    record_miss(t, "prices")
             except Exception as e:
                 log.warning("Backfill failed for %s: %s", t, e)
             time.sleep(0.5)
@@ -756,8 +818,13 @@ def batch_ingest_prices(tickers: list[str], lookback_days: int = 3 * 365) -> int
 
 def _download_and_insert(
     conn, batch_tickers: list[str], start: date, end: date, to_download: list[tuple]
-) -> int:
-    """Download prices for a batch and insert into DB. Returns row count."""
+) -> tuple[int, list]:
+    """Download prices for a batch and insert into DB.
+
+    Returns (row count, missing): missing lists (ticker, start) pairs that
+    came back empty from yfinance (rate-limited or no data), so the caller
+    can retry them. Multi-ticker batches only.
+    """
     today = end
 
     try:
@@ -773,25 +840,32 @@ def _download_and_insert(
         )
     except Exception as e:
         log.error("Batch download failed: %s", e)
-        return 0
+        return 0, list(to_download)
 
     if data is None or data.empty:
         log.warning("Batch download returned no data.")
-        return 0
+        return 0, list(to_download)
 
     total_rows = 0
+    missing: list[tuple] = []
 
     if len(batch_tickers) == 1:
-        # Single ticker: no multi-level columns
+        # Single ticker. Newer yfinance returns MultiIndex columns even for one
+        # ticker when group_by="ticker"; flatten to the ticker's sub-frame.
         ticker = batch_tickers[0]
         start_date = dict(to_download)[ticker]
-        df = data.copy()
+        if isinstance(data.columns, pd.MultiIndex):
+            df = data[ticker].copy()
+        else:
+            df = data.copy()
         if df.index.tz is not None:
             df.index = df.index.tz_localize(None)
         rows = []
         for idx, row in df.iterrows():
             d = idx.date()
             if d < start_date:
+                continue
+            if pd.isna(row.get("Close")):
                 continue
             div = float(row.get("Dividends", 0) or 0)
             split = float(row.get("Stock Splits", 0) or 0)
@@ -810,9 +884,13 @@ def _download_and_insert(
             try:
                 sub = data[ticker].copy()
             except KeyError:
+                # Not present in the response at all (failed download)
                 log.warning("No data in batch for %s", ticker)
+                missing.append((ticker, start_date))
                 continue
-            if sub.empty:
+            if sub.dropna(how="all").empty:
+                # Present but all-NaN (rate-limited / no data)
+                missing.append((ticker, start_date))
                 continue
             if sub.index.tz is not None:
                 sub.index = sub.index.tz_localize(None)
@@ -835,7 +913,7 @@ def _download_and_insert(
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", rows)
                 total_rows += len(rows)
 
-    return total_rows
+    return total_rows, missing
 
 
 def ingest_all(ticker: str) -> None:
@@ -853,7 +931,10 @@ def ingest_all(ticker: str) -> None:
     ingest_news(ticker)
     time.sleep(API_PAUSE)
 
-    ingest_fundamentals(ticker)
+    try:
+        ingest_fundamentals(ticker)
+    except Exception as e:
+        log.warning("Fundamentals fetch failed for %s: %s", ticker, e)
     time.sleep(API_PAUSE)
 
     ingest_financials(ticker)

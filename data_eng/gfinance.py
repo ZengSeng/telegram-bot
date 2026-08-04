@@ -148,3 +148,24 @@ def ingest_gfinance_overview(ticker: str) -> bool:
         len(data["bear_points"]),
     )
     return True
+
+
+def ensure_gfinance_overview(ticker: str, max_age_days: int = 1) -> bool:
+    """Ensure a recent overview row exists for a ticker; scrape if missing/stale.
+
+    Used by the night analysis to pre-populate bull/bear grounding before
+    TradingAgents runs, so the debate nodes read from DuckDB instead of
+    scraping mid-analysis.
+    """
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT MAX(date_fetched) FROM gfinance_overview WHERE ticker = ?",
+        [ticker],
+    ).fetchone()
+    conn.close()
+    last = row[0] if row and row[0] else None
+    if isinstance(last, str):
+        last = date.fromisoformat(last)
+    if last is not None and (date.today() - last).days <= max_age_days:
+        return True
+    return ingest_gfinance_overview(ticker)

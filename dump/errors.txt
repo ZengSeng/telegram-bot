@@ -32,3 +32,253 @@ This app has to be main thing, to cover big market (not just supplements Sharesi
 
 
 
+:\Users\Zengseng>python -m data_eng --night --limit 10 --analysis-limit 1
+C:\Python314\python.exe: No module named data_eng
+
+C:\Users\Zengseng>cd C:\repo\telegram-bot
+
+C:\repo\telegram-bot>venv\Scripts\activate
+
+(venv) C:\repo\telegram-bot>python -m data_eng --night --limit 10 --analysis-limit 1
+Running night pipeline (universe + financials + bulk enrichment + analyses)...
+2026-08-05 07:27:37,202 - data_eng.pipeline - INFO - === Night pipeline started ===
+2026-08-05 07:27:37,244 - data_eng.universe - INFO - Universe: scraping sector 'industrials' (group 1)
+2026-08-05 07:27:59,988 - data_eng.universe - INFO - Universe: scraping sector 'utilities' (group 1)
+2026-08-05 07:28:05,651 - data_eng.universe - INFO - Universe: scraping sector 'basic-materials' (group 1)
+2026-08-05 07:28:17,976 - data_eng.universe - INFO - Universe: group 1 complete — 680 tickers
+2026-08-05 07:28:17,987 - data_eng.universe - INFO - Universe: scraping sector 'financial-services' (group 2)
+2026-08-05 07:28:31,739 - data_eng.universe - INFO - Universe: scraping sector 'real-estate' (group 2)
+2026-08-05 07:28:42,565 - data_eng.universe - INFO - Universe: scraping sector 'communication-services' (group 2)
+2026-08-05 07:28:49,022 - data_eng.universe - INFO - Universe: group 2 complete — 728 tickers
+2026-08-05 07:28:49,033 - data_eng.universe - INFO - Universe: scraping sector 'technology' (group 3)
+2026-08-05 07:29:00,274 - data_eng.universe - INFO - Universe: scraping sector 'energy' (group 3)
+2026-08-05 07:29:07,635 - data_eng.universe - INFO - Universe: scraping sector 'consumer-defensive' (group 3)
+2026-08-05 07:29:18,740 - data_eng.universe - INFO - Universe: group 3 complete — 669 tickers
+2026-08-05 07:29:18,751 - data_eng.universe - INFO - Universe: scraping sector 'healthcare' (group 4)
+2026-08-05 07:29:28,513 - data_eng.universe - INFO - Universe: scraping sector 'consumer-cyclical' (group 4)
+2026-08-05 07:29:49,209 - data_eng.universe - INFO - Universe: group 4 complete — 675 tickers
+2026-08-05 07:29:49,210 - data_eng.universe - INFO - Universe: full scrape complete — 2752 total tickers
+2026-08-05 07:29:49,210 - data_eng.pipeline - INFO - Night: universe scrape done — 2752 tickers in 132.0s
+2026-08-05 07:29:49,223 - data_eng.pipeline - INFO - Night: financials due for RKLB
+2026-08-05 07:29:54,960 - data_eng.ingest - INFO - Ingested 16 financial statement rows for RKLB
+2026-08-05 07:29:56,473 - data_eng.pipeline - INFO - Night: financials due for WDC
+2026-08-05 07:30:01,789 - data_eng.ingest - INFO - Ingested 18 financial statement rows for WDC
+2026-08-05 07:30:03,302 - data_eng.pipeline - INFO - Night: financials still fresh for MU, skipping
+2026-08-05 07:30:03,313 - data_eng.pipeline - INFO - Night: financials due for SPCX
+2026-08-05 07:30:08,757 - data_eng.ingest - INFO - Ingested 5 financial statement rows for SPCX
+2026-08-05 07:30:10,257 - data_eng.pipeline - INFO - Night: financials done — 3 refreshed in 21.0s
+2026-08-05 07:30:10,322 - data_eng.enrich - INFO - Enrich: processing 10 tickers (limit=10, sector=all)
+2026-08-05 07:30:10,322 - data_eng.enrich - INFO - Enrich [1/10]: ALMU (never loaded)
+2026-08-05 07:30:10,762 - data_eng.ingest - INFO - Ingested fundamentals for ALMU
+2026-08-05 07:30:12,274 - data_eng.enrich - INFO - Enrich [2/10]: DIOD (never loaded)
+2026-08-05 07:30:12,711 - data_eng.ingest - INFO - Ingested fundamentals for DIOD
+2026-08-05 07:30:14,222 - data_eng.enrich - INFO - Enrich [3/10]: MRAM (never loaded)
+2026-08-05 07:30:14,662 - data_eng.ingest - INFO - Ingested fundamentals for MRAM
+2026-08-05 07:30:16,174 - data_eng.enrich - INFO - Enrich [4/10]: ALGM (never loaded)
+2026-08-05 07:30:16,615 - data_eng.ingest - INFO - Ingested fundamentals for ALGM
+2026-08-05 07:30:18,127 - data_eng.enrich - INFO - Enrich [5/10]: AIP (never loaded)
+2026-08-05 07:30:18,567 - data_eng.ingest - INFO - Ingested fundamentals for AIP
+2026-08-05 07:30:20,079 - data_eng.enrich - INFO - Enrich [6/10]: MSAI (never loaded)
+2026-08-05 07:30:20,507 - data_eng.ingest - INFO - Ingested fundamentals for MSAI
+2026-08-05 07:30:22,019 - data_eng.enrich - INFO - Enrich [7/10]: ACIW (never loaded)
+2026-08-05 07:30:22,457 - data_eng.ingest - INFO - Ingested fundamentals for ACIW
+2026-08-05 07:30:23,969 - data_eng.enrich - INFO - Enrich [8/10]: MIND (never loaded)
+2026-08-05 07:30:24,402 - data_eng.ingest - INFO - Ingested fundamentals for MIND
+2026-08-05 07:30:25,914 - data_eng.enrich - INFO - Enrich [9/10]: CORZ (never loaded)
+2026-08-05 07:30:26,389 - data_eng.ingest - INFO - Ingested fundamentals for CORZ
+2026-08-05 07:30:27,901 - data_eng.enrich - INFO - Enrich [10/10]: MSFT (never loaded)
+2026-08-05 07:30:28,331 - data_eng.ingest - INFO - Ingested fundamentals for MSFT
+2026-08-05 07:30:29,842 - data_eng.enrich - INFO - Enrich: complete — 10/10 succeeded
+2026-08-05 07:30:29,842 - data_eng.pipeline - INFO - Night: fundamentals enriched 10 tickers in 19.6s
+2026-08-05 07:30:29,861 - data_eng.enrich - INFO - Bulk analyst: processing 10 tickers (limit=10)
+2026-08-05 07:30:29,861 - data_eng.enrich - INFO - Bulk analyst [1/10]: CRDO (never loaded)
+2026-08-05 07:30:31,692 - data_eng.ingest - INFO - Ingested 21 analyst entries for CRDO
+2026-08-05 07:30:33,203 - data_eng.enrich - INFO - Bulk analyst [2/10]: AVGO (never loaded)
+2026-08-05 07:30:35,043 - data_eng.ingest - INFO - Ingested 21 analyst entries for AVGO
+2026-08-05 07:30:36,556 - data_eng.enrich - INFO - Bulk analyst [3/10]: SMTC (never loaded)
+2026-08-05 07:30:38,381 - data_eng.ingest - INFO - Ingested 21 analyst entries for SMTC
+2026-08-05 07:30:39,893 - data_eng.enrich - INFO - Bulk analyst [4/10]: RMBS (never loaded)
+2026-08-05 07:30:41,726 - data_eng.ingest - INFO - Ingested 21 analyst entries for RMBS
+2026-08-05 07:30:43,238 - data_eng.enrich - INFO - Bulk analyst [5/10]: LASR (never loaded)
+2026-08-05 07:30:45,112 - data_eng.ingest - INFO - Ingested 21 analyst entries for LASR
+2026-08-05 07:30:46,625 - data_eng.enrich - INFO - Bulk analyst [6/10]: MSAI (never loaded)
+2026-08-05 07:30:48,430 - data_eng.ingest - INFO - Ingested 7 analyst entries for MSAI
+2026-08-05 07:30:49,942 - data_eng.enrich - INFO - Bulk analyst [7/10]: DIOD (never loaded)
+2026-08-05 07:30:51,776 - data_eng.ingest - INFO - Ingested 21 analyst entries for DIOD
+2026-08-05 07:30:53,288 - data_eng.enrich - INFO - Bulk analyst [8/10]: MIND (never loaded)
+2026-08-05 07:30:55,510 - yfinance - ERROR - HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"No fundamentals data found for symbol: MIND"}}}
+2026-08-05 07:30:55,524 - data_eng.ingest - INFO - Ingested 1 analyst entries for MIND
+2026-08-05 07:30:57,036 - data_eng.enrich - INFO - Bulk analyst [9/10]: ALGM (never loaded)
+2026-08-05 07:30:58,894 - data_eng.ingest - INFO - Ingested 21 analyst entries for ALGM
+2026-08-05 07:31:00,406 - data_eng.enrich - INFO - Bulk analyst [10/10]: AIP (never loaded)
+2026-08-05 07:31:02,233 - data_eng.ingest - INFO - Ingested 21 analyst entries for AIP
+2026-08-05 07:31:03,746 - data_eng.enrich - INFO - Bulk analyst: complete — 10/10 succeeded
+2026-08-05 07:31:03,746 - data_eng.pipeline - INFO - Night: analyst targets done — 10 tickers in 33.9s
+2026-08-05 07:31:03,764 - data_eng.enrich - INFO - Bulk enriched: processing 10 tickers (limit=10)
+2026-08-05 07:31:03,764 - data_eng.enrich - INFO - Bulk enriched [1/10]: CRDO (never loaded)
+2026-08-05 07:31:03,765 - data_eng.ingest - INFO - Enriching CRDO ...
+2026-08-05 07:31:08,991 - data_eng.ingest - INFO - Enriched CRDO
+2026-08-05 07:31:10,503 - data_eng.enrich - INFO - Bulk enriched [2/10]: AVGO (never loaded)
+2026-08-05 07:31:10,503 - data_eng.ingest - INFO - Enriching AVGO ...
+2026-08-05 07:31:15,879 - data_eng.ingest - INFO - Enriched AVGO
+2026-08-05 07:31:17,391 - data_eng.enrich - INFO - Bulk enriched [3/10]: SMTC (never loaded)
+2026-08-05 07:31:17,391 - data_eng.ingest - INFO - Enriching SMTC ...
+2026-08-05 07:31:22,769 - data_eng.ingest - INFO - Enriched SMTC
+2026-08-05 07:31:24,281 - data_eng.enrich - INFO - Bulk enriched [4/10]: RMBS (never loaded)
+2026-08-05 07:31:24,281 - data_eng.ingest - INFO - Enriching RMBS ...
+2026-08-05 07:31:29,711 - data_eng.ingest - INFO - Enriched RMBS
+2026-08-05 07:31:31,223 - data_eng.enrich - INFO - Bulk enriched [5/10]: LASR (never loaded)
+2026-08-05 07:31:31,223 - data_eng.ingest - INFO - Enriching LASR ...
+2026-08-05 07:31:36,463 - data_eng.ingest - INFO - Enriched LASR
+2026-08-05 07:31:37,974 - data_eng.enrich - INFO - Bulk enriched [6/10]: MSAI (never loaded)
+2026-08-05 07:31:37,975 - data_eng.ingest - INFO - Enriching MSAI ...
+2026-08-05 07:31:43,193 - data_eng.ingest - INFO - Enriched MSAI
+2026-08-05 07:31:44,705 - data_eng.enrich - INFO - Bulk enriched [7/10]: DIOD (never loaded)
+2026-08-05 07:31:44,705 - data_eng.ingest - INFO - Enriching DIOD ...
+2026-08-05 07:31:50,074 - data_eng.ingest - INFO - Enriched DIOD
+2026-08-05 07:31:51,586 - data_eng.enrich - INFO - Bulk enriched [8/10]: MIND (never loaded)
+2026-08-05 07:31:51,586 - data_eng.ingest - INFO - Enriching MIND ...
+2026-08-05 07:31:56,813 - data_eng.ingest - INFO - Enriched MIND
+2026-08-05 07:31:58,325 - data_eng.enrich - INFO - Bulk enriched [9/10]: ALGM (never loaded)
+2026-08-05 07:31:58,325 - data_eng.ingest - INFO - Enriching ALGM ...
+2026-08-05 07:32:03,553 - data_eng.ingest - INFO - Enriched ALGM
+2026-08-05 07:32:05,065 - data_eng.enrich - INFO - Bulk enriched [10/10]: AIP (never loaded)
+2026-08-05 07:32:05,065 - data_eng.ingest - INFO - Enriching AIP ...
+2026-08-05 07:32:10,304 - data_eng.ingest - INFO - Enriched AIP
+2026-08-05 07:32:11,816 - data_eng.enrich - INFO - Bulk enriched: complete — 10/10 succeeded
+2026-08-05 07:32:11,816 - data_eng.pipeline - INFO - Night: ticker_enriched done — 10 tickers in 68.1s
+2026-08-05 07:32:11,831 - data_eng.candidates - INFO - Analysis tickers: 7 candidates + 4 watchlist = 8 total
+2026-08-05 07:32:11,918 - data_eng.events - INFO - Events: MU triggered by ['price_move']
+2026-08-05 07:32:12,058 - data_eng.events - INFO - Events: YOU has no prior analysis, will analyze
+2026-08-05 07:32:12,316 - data_eng.pipeline - INFO - Night: TradingAgents queue — 2 event-triggered + 1 stale (3 unique, budget 1)
+2026-08-05 07:32:12,329 - data_eng.pipeline - INFO - Night: analyzing MU (1/1)...
+2026-08-05 07:32:13,007 - analysis.runner - INFO - Patched TradingAgents dataflows with DuckDB vendor
+2026-08-05 07:32:13,007 - analysis.runner - INFO - Starting TradingAgents analysis: MU on 2026-08-05
+2026-08-05 07:32:27,571 - httpx - INFO - HTTP Request: POST http://127.0.0.1:10000/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 07:32:34,814 - httpx - INFO - HTTP Request: POST http://127.0.0.1:10000/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 07:32:37,026 - httpx - INFO - HTTP Request: POST http://127.0.0.1:10000/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 07:32:48,696 - httpx - INFO - HTTP Request: POST http://127.0.0.1:10000/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 07:33:35,894 - httpx - INFO - HTTP Request: POST http://127.0.0.1:10000/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 07:33:52,410 - httpx - INFO - HTTP Request: POST http://127.0.0.1:10000/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 07:35:26,865 - httpx - INFO - HTTP Request: POST http://127.0.0.1:10000/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 07:35:36,162 - httpx - INFO - HTTP Request: POST http://127.0.0.1:10000/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 07:36:48,650 - httpx - INFO - HTTP Request: POST http://127.0.0.1:10000/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 07:37:28,223 - data_eng.gfinance - WARNING - Google Finance overview not found for
+2026-08-05 07:37:59,190 - httpx - INFO - HTTP Request: POST http://127.0.0.1:10000/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 07:38:34,383 - data_eng.gfinance - WARNING - Google Finance overview not found for
+2026-08-05 07:39:22,396 - httpx - INFO - HTTP Request: POST http://127.0.0.1:10000/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 07:39:43,409 - httpx - INFO - HTTP Request: POST http://127.0.0.1:10000/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 07:39:57,510 - httpx - INFO - HTTP Request: POST http://127.0.0.1:10000/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 07:40:38,318 - httpx - INFO - HTTP Request: POST http://127.0.0.1:10000/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 07:41:19,002 - httpx - INFO - HTTP Request: POST http://127.0.0.1:10000/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 07:41:31,118 - httpx - INFO - HTTP Request: POST http://127.0.0.1:10000/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 07:42:10,247 - httpx - INFO - HTTP Request: POST http://127.0.0.1:10000/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 07:42:10,255 - analysis.runner - INFO - Report saved: C:\repo\telegram-bot\data\analysis_reports\reports\MU_20260805_074210\complete_report.md
+2026-08-05 07:42:10,255 - analysis.runner - INFO - Analysis complete for MU
+2026-08-05 07:42:10,281 - data_eng.analysis_ingest - INFO - Ingested decision for MU (2026-08-05): Sell / Underweight
+2026-08-05 07:42:10,282 - data_eng.analysis_ingest - INFO - Cleaned up state logs: C:\repo\telegram-bot\data\analysis_reports\MU\TradingAgentsStrategy_logs
+2026-08-05 07:42:10,282 - data_eng.pipeline - INFO - Night: analysis + ingestion complete for MU
+2026-08-05 07:42:10,282 - data_eng.pipeline - INFO - Night: analysis budget (1) reached — remaining tickers roll to the next run
+2026-08-05 07:42:10,282 - data_eng.pipeline - INFO - Night: TradingAgents done — 1 analyses in 598.5s
+2026-08-05 07:42:10,282 - data_eng.pipeline - INFO - === Night pipeline complete (873.1s total) ===
+
+(venv) C:\repo\telegram-bot>python -m data_eng --daily
+Running daily pipeline for: RKLB, WDC, MU, SPCX
+2026-08-05 07:43:31,791 - data_eng.pipeline - INFO - === Daily pipeline started for 4 tickers ===
+2026-08-05 07:43:31,811 - data_eng.pipeline - INFO - Daily: batch prices for 2770 universe tickers
+2026-08-05 07:43:36,597 - data_eng.ingest - INFO - Batch downloading 2738 tickers from 2026-07-08 (incremental, 4 chunks)
+2026-08-05 07:46:16,744 - data_eng.ingest - INFO - Backfill: skipping 3 known no-data tickers (THR, VACH, CGCT)
+2026-08-05 07:46:16,744 - data_eng.ingest - INFO - Backfilling 29 tickers individually (new or >30d stale)
+2026-08-05 07:47:41,468 - data_eng.ingest - INFO - Batch ingest complete: 29262 rows for 2770 tickers
+2026-08-05 07:47:41,469 - data_eng.pipeline - INFO - Daily: computing technical indicators...
+2026-08-05 07:47:41,523 - data_eng.ingest - INFO - Technicals: 2719 tickers with sufficient price data
+2026-08-05 07:47:41,556 - data_eng.ingest - INFO - Technicals: 2719 to process (0 already done today)
+2026-08-05 07:47:46,551 - data_eng.ingest - INFO - Technicals: progress 100/2719 (100 ok)
+2026-08-05 07:47:51,405 - data_eng.ingest - INFO - Technicals: progress 200/2719 (200 ok)
+2026-08-05 07:47:56,330 - data_eng.ingest - INFO - Technicals: progress 300/2719 (300 ok)
+2026-08-05 07:48:01,308 - data_eng.ingest - INFO - Technicals: progress 400/2719 (400 ok)
+2026-08-05 07:48:06,248 - data_eng.ingest - INFO - Technicals: progress 500/2719 (500 ok)
+2026-08-05 07:48:11,089 - data_eng.ingest - INFO - Technicals: progress 600/2719 (600 ok)
+2026-08-05 07:48:15,911 - data_eng.ingest - INFO - Technicals: progress 700/2719 (700 ok)
+2026-08-05 07:48:20,585 - data_eng.ingest - INFO - Technicals: progress 800/2719 (800 ok)
+2026-08-05 07:48:25,283 - data_eng.ingest - INFO - Technicals: progress 900/2719 (900 ok)
+2026-08-05 07:48:30,003 - data_eng.ingest - INFO - Technicals: progress 1000/2719 (1000 ok)
+2026-08-05 07:48:34,662 - data_eng.ingest - INFO - Technicals: progress 1100/2719 (1100 ok)
+2026-08-05 07:48:39,368 - data_eng.ingest - INFO - Technicals: progress 1200/2719 (1200 ok)
+2026-08-05 07:48:44,063 - data_eng.ingest - INFO - Technicals: progress 1300/2719 (1300 ok)
+2026-08-05 07:48:48,752 - data_eng.ingest - INFO - Technicals: progress 1400/2719 (1400 ok)
+2026-08-05 07:48:53,464 - data_eng.ingest - INFO - Technicals: progress 1500/2719 (1500 ok)
+2026-08-05 07:48:58,173 - data_eng.ingest - INFO - Technicals: progress 1600/2719 (1600 ok)
+2026-08-05 07:49:02,884 - data_eng.ingest - INFO - Technicals: progress 1700/2719 (1700 ok)
+2026-08-05 07:49:07,640 - data_eng.ingest - INFO - Technicals: progress 1800/2719 (1800 ok)
+2026-08-05 07:49:12,334 - data_eng.ingest - INFO - Technicals: progress 1900/2719 (1900 ok)
+2026-08-05 07:49:17,105 - data_eng.ingest - INFO - Technicals: progress 2000/2719 (2000 ok)
+2026-08-05 07:49:21,871 - data_eng.ingest - INFO - Technicals: progress 2100/2719 (2100 ok)
+2026-08-05 07:49:26,666 - data_eng.ingest - INFO - Technicals: progress 2200/2719 (2200 ok)
+2026-08-05 07:49:31,477 - data_eng.ingest - INFO - Technicals: progress 2300/2719 (2300 ok)
+2026-08-05 07:49:36,320 - data_eng.ingest - INFO - Technicals: progress 2400/2719 (2400 ok)
+2026-08-05 07:49:41,161 - data_eng.ingest - INFO - Technicals: progress 2500/2719 (2500 ok)
+2026-08-05 07:49:46,011 - data_eng.ingest - INFO - Technicals: progress 2600/2719 (2600 ok)
+2026-08-05 07:49:50,843 - data_eng.ingest - INFO - Technicals: progress 2700/2719 (2700 ok)
+2026-08-05 07:49:51,759 - data_eng.ingest - INFO - Technicals: complete — 2719/2719 processed
+2026-08-05 07:49:51,760 - data_eng.pipeline - INFO - Pipeline: processing RKLB
+2026-08-05 07:49:52,521 - data_eng.ingest - INFO - Ingested 50 news articles for RKLB
+2026-08-05 07:49:54,022 - data_eng.pipeline - INFO - Pipeline: processing WDC
+2026-08-05 07:49:54,769 - data_eng.ingest - INFO - Ingested 50 news articles for WDC
+2026-08-05 07:49:56,270 - data_eng.pipeline - INFO - Pipeline: processing MU
+2026-08-05 07:49:56,764 - data_eng.ingest - INFO - Ingested 50 news articles for MU
+2026-08-05 07:49:58,265 - data_eng.pipeline - INFO - Pipeline: processing SPCX
+2026-08-05 07:49:58,780 - data_eng.ingest - INFO - Ingested 50 news articles for SPCX
+2026-08-05 07:50:05,969 - data_eng.ingest - INFO - Ingested 30 global news articles
+2026-08-05 07:50:05,970 - data_eng.pipeline - INFO - Pipeline: scraping Google Finance overviews, bull and bear view...
+2026-08-05 07:50:15,091 - data_eng.gfinance - INFO - Google Finance overview for RKLB: 68.4% bullish, 3 bull / 3 bear points
+2026-08-05 07:50:20,583 - data_eng.gfinance - INFO - Google Finance overview for WDC: 40.0% bullish, 3 bull / 3 bear points
+2026-08-05 07:50:28,139 - data_eng.gfinance - INFO - Google Finance overview for MU: 49.8% bullish, 3 bull / 2 bear points
+2026-08-05 07:50:33,630 - data_eng.gfinance - INFO - Google Finance overview for SPCX: 30.0% bullish, 3 bull / 3 bear points
+2026-08-05 07:50:33,631 - data_eng.pipeline - INFO - Pipeline: fetching Yahoo Finance overviews...
+2026-08-05 07:50:33,631 - data_eng.ingest - INFO - Fetching yfinance overview for RKLB ...
+2026-08-05 07:50:40,016 - data_eng.ingest - INFO - yfinance overview for RKLB: ok
+2026-08-05 07:50:40,016 - data_eng.ingest - INFO - Fetching yfinance overview for WDC ...
+2026-08-05 07:50:44,017 - data_eng.ingest - INFO - yfinance overview for WDC: ok
+2026-08-05 07:50:44,018 - data_eng.ingest - INFO - Fetching yfinance overview for MU ...
+2026-08-05 07:50:49,311 - data_eng.ingest - INFO - yfinance overview for MU: ok
+2026-08-05 07:50:49,311 - data_eng.ingest - INFO - Fetching yfinance overview for SPCX ...
+2026-08-05 07:50:54,891 - data_eng.ingest - INFO - yfinance overview for SPCX: ok
+2026-08-05 07:50:54,891 - data_eng.pipeline - INFO - Pipeline: generating AI news summaries...
+2026-08-05 07:50:54,911 - data_eng.summarize - INFO - Summarizing news for MU (17 articles)...
+2026-08-05 07:51:10,320 - data_eng.summarize - INFO - Stored summary for MU
+2026-08-05 07:51:10,321 - data_eng.summarize - INFO - Summarizing news for RKLB (3 articles)...
+2026-08-05 07:51:25,222 - data_eng.summarize - INFO - Stored summary for RKLB
+2026-08-05 07:51:25,222 - data_eng.summarize - INFO - Summarizing news for SPCX (57 articles)...
+2026-08-05 07:51:42,122 - data_eng.summarize - INFO - Stored summary for SPCX
+2026-08-05 07:51:42,122 - data_eng.summarize - INFO - Summarizing news for WDC (4 articles)...
+2026-08-05 07:52:01,510 - data_eng.summarize - INFO - Stored summary for WDC
+2026-08-05 07:52:01,510 - data_eng.pipeline - INFO - Pipeline: summarized 4 ticker(s)
+2026-08-05 07:52:01,510 - data_eng.pipeline - INFO - Pipeline: running quantitative screener...
+2026-08-05 07:52:01,510 - data_eng.screener - INFO - Screener: computing metrics for 4 tickers...
+2026-08-05 07:52:01,648 - data_eng.screener - INFO - Screener: stored 4 scores for 2026-08-05
+2026-08-05 07:52:01,651 - data_eng.screener - INFO - Screener: top 5 tickers:
+        overall_score
+ticker
+MU          85.625000
+WDC         68.263889
+SPCX        52.083333
+RKLB        42.430556
+2026-08-05 07:52:01,651 - data_eng.pipeline - INFO - Pipeline: screener top 5: ['MU', 'WDC', 'SPCX', 'RKLB']
+2026-08-05 07:52:01,651 - data_eng.pipeline - INFO - Pipeline: selecting candidates...
+2026-08-05 07:52:01,651 - data_eng.candidates - INFO - Candidates: loading scored tickers with sector...
+2026-08-05 07:52:01,669 - data_eng.candidates - INFO - Candidates: 72 scored tickers available
+2026-08-05 07:52:01,672 - data_eng.candidates - INFO - Candidates: 7 tickers after sector allocation
+2026-08-05 07:52:01,701 - data_eng.candidates - INFO - Candidates: final selection = 7 tickers: ['MU', 'RELY', 'DLO', 'YOU', 'NVDA', 'SPCX', 'RKLB']
+2026-08-05 07:52:01,741 - data_eng.candidates - INFO - Candidates: stored 7 rows for 2026-08-05
+2026-08-05 07:52:01,741 - data_eng.pipeline - INFO - Pipeline: 7 candidates selected: ['MU', 'RELY', 'DLO', 'YOU', 'NVDA', 'SPCX', 'RKLB']
+2026-08-05 07:52:01,741 - data_eng.pipeline - INFO - Pipeline: running portfolio engine...
+2026-08-05 07:52:01,801 - data_eng.portfolio_engine - INFO - Portfolio engine: capital=$10000, invested=$18962, deployable=$0
+2026-08-05 07:52:01,832 - data_eng.portfolio_engine - INFO - Portfolio engine: stored 3 decisions for 2026-08-05
+2026-08-05 07:52:01,832 - data_eng.portfolio_engine - INFO - Portfolio engine: 0 BUY, 1 SELL, 2 HOLD
+2026-08-05 07:52:01,832 - data_eng.pipeline - INFO - Pipeline: portfolio engine done — 0 BUY, 1 SELL
+2026-08-05 07:52:01,832 - data_eng.pipeline - INFO - Pipeline: running portfolio review...
+2026-08-05 07:52:01,859 - data_eng.portfolio_review - INFO - Portfolio review: asking LLM to review 3 decisions...
+2026-08-05 07:52:23,880 - data_eng.portfolio_review - INFO - Portfolio review: stored review for 2026-08-05 (1147 chars)
+2026-08-05 07:52:23,880 - data_eng.pipeline - INFO - Pipeline: portfolio review complete (1147 chars)
+2026-08-05 07:52:23,880 - data_eng.pipeline - INFO - === Daily pipeline complete ===

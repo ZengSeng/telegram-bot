@@ -46,8 +46,8 @@ SUMMARY_HOUR = 9
 SUMMARY_MINUTE = 30
 PIPELINE_HOUR = 8
 PIPELINE_MINUTE = 0
-NIGHT_PIPELINE_HOUR = 15
-NIGHT_PIPELINE_MINUTE = 0
+# Night pipeline runs 3x in the afternoon/evening (hour, minute) — NZT
+NIGHT_PIPELINE_TIMES = [(16, 0), (18, 0), (20, 0)]
 LOCAL_TIMEZONE = "Pacific/Auckland"  # New Zealand
 
 # ---------------------------------------------------------------------------

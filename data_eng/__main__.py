@@ -86,7 +86,11 @@ def main():
     )
     parser.add_argument(
         "--night", action="store_true",
-        help="Run night pipeline: universe + financials + analyst targets + enriched (3 PM NZT)"
+        help="Run night pipeline: universe + financials + bulk enrichment + TradingAgents batch"
+    )
+    parser.add_argument(
+        "--analysis-limit", type=int, default=None,
+        help="Max TradingAgents analyses for --night (default: NIGHT_ANALYSIS_LIMIT)"
     )
     parser.add_argument(
         "--batch-universe", action="store_true",
@@ -95,13 +99,15 @@ def main():
     args = parser.parse_args()
 
     if args.night:
-        print("Running night pipeline (universe + financials + analyst targets + enriched)...")
+        print("Running night pipeline (universe + financials + bulk enrichment + analyses)...")
         watchlist = _load_watchlist()
+        from .pipeline import NIGHT_ANALYSIS_LIMIT
         run_night_pipeline(
             tickers=watchlist,
             fundamentals_limit=args.limit,
             analyst_limit=args.limit,
             enriched_limit=args.limit,
+            analysis_limit=args.analysis_limit if args.analysis_limit is not None else NIGHT_ANALYSIS_LIMIT,
         )
     elif args.universe:
         print("Building full stock universe...")

@@ -179,12 +179,14 @@ def detect_events(ticker: str, since_date: date | None = None) -> list[dict]:
 
     # News and earnings need a since_date
     if since_date:
-        try:
-            ev = _check_news(ticker, since_date)
-            if ev:
-                events.append(ev)
-        except Exception as e:
-            log.debug("Events: news check failed for %s: %s", ticker, e)
+        # News check disabled: the daily pipeline refreshes watchlist news
+        # every morning, so this would trigger an analysis every single day.
+        # try:
+        #     ev = _check_news(ticker, since_date)
+        #     if ev:
+        #         events.append(ev)
+        # except Exception as e:
+        #     log.debug("Events: news check failed for %s: %s", ticker, e)
 
         try:
             ev = _check_earnings(ticker, since_date)
