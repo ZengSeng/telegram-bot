@@ -13,14 +13,14 @@ Rules:
 
 import csv
 import logging
-import re
 from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
-import numpy as np
+from stock_bot.portfolio import extract_ticker
 
 from .db import get_connection
+from .utils import safe_float
 
 log = logging.getLogger(__name__)
 
@@ -38,51 +38,39 @@ TRADES_CSV = Path(__file__).parent.parent / "data" / "trades.csv"
 
 
 # ---------------------------------------------------------------------------
-# Holdings (FIFO from trades.csv)
+# Holdings (net buys minus sells from trades.csv)
 # ---------------------------------------------------------------------------
 
-def _load_holdings() -> dict[str, float]:
-    """Return {ticker: shares_held} from trades.csv using FIFO."""
+def _load_net_holdings() -> dict[str, float]:
+    """Return {ticker: shares_held} from trades.csv.
+
+    Nets total buys minus total sells per ticker (lot order doesn't matter
+    when only the remaining share count is needed).
+    """
     if not TRADES_CSV.exists():
         return {}
 
     with TRADES_CSV.open("r", newline="") as f:
         rows = list(csv.DictReader(f))
 
-    lots: dict[str, list[dict]] = defaultdict(list)
-    sells: dict[str, list[dict]] = defaultdict(list)
-
+    holdings: dict[str, float] = defaultdict(float)
     for row in rows:
-        stock = row.get("stock", "")
-        # Extract ticker: "Name (TICKER | EXCHANGE)" or "Name | TICKER | EXCHANGE"
-        m = re.search(r"\(([A-Z]+)", stock.upper())
-        if not m:
-            m = re.search(r"\|\s*([A-Z]{1,5})\s*\|", stock.upper())
-        if not m:
+        ticker = extract_ticker(row.get("stock", ""))
+        if not ticker:
             continue
-        ticker = m.group(1)
-
         ttype = row.get("transaction_type", "").lower().strip()
         try:
             shares = float(row.get("shares", 0))
-            price = float(row.get("price_per_share_usd", 0))
         except (ValueError, TypeError):
             continue
+        if shares <= 0:
+            continue
+        if ttype == "buy":
+            holdings[ticker] += shares
+        elif ttype == "sell":
+            holdings[ticker] -= shares
 
-        if ttype == "buy" and shares > 0:
-            lots[ticker].append({"shares": shares, "price": price})
-        elif ttype == "sell" and shares > 0:
-            sells[ticker].append(shares)
-
-    holdings: dict[str, float] = {}
-    for ticker, lot_list in lots.items():
-        remaining = sum(l["shares"] for l in lot_list)
-        for sell_shares in sells.get(ticker, []):
-            remaining -= sell_shares
-        if remaining > 0.001:
-            holdings[ticker] = remaining
-
-    return holdings
+    return {t: s for t, s in holdings.items() if s > 0.001}
 
 
 # ---------------------------------------------------------------------------
@@ -171,7 +159,7 @@ def run_portfolio_engine(total_capital: float | None = None) -> list[dict]:
     today = date.today()
 
     # Load inputs
-    holdings = _load_holdings()
+    holdings = _load_net_holdings()
     decisions = _load_latest_decisions()
     scores = _load_screener_scores()
     sectors = _load_sectors()
@@ -384,10 +372,5 @@ def _store_decisions(results: list[dict], decision_date: date) -> None:
 
 
 def _safe_float(val) -> float | None:
-    """Convert to float, returning None for NaN/inf/None."""
-    if val is None:
-        return None
-    f = float(val)
-    if np.isnan(f) or np.isinf(f):
-        return None
-    return round(f, 4)
+    """Portfolio values (shares, stops, positions) keep 4-decimal precision."""
+    return safe_float(val, decimals=4)

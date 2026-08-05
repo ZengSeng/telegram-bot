@@ -26,14 +26,11 @@
 
 ## Update Summary
 **Changes Made**
-- Major architectural overhaul with new enrichment system (enrich.py) for sophisticated rolling batch processing
-- Enhanced pipeline architecture with night/day separation and smart scheduling for API rate limits
-- Technical indicators migration to dedicated table with improved batch processing capabilities
-- New database schema supporting trading configurations, news metadata, and user preferences
-- Command-line interface enhancements with comprehensive pipeline orchestration options
-- Sophisticated rolling batch enrichment with watchlist prioritization and staleness-based scheduling
-- Specialized technical indicator computation with optimized batch processing
-- Complete portfolio management system integration with deterministic rules engine
+- Enhanced data scheduling and priority system completely restructured from rating-filtered (Strong Buy/Buy only) to sophisticated priority-ordered processing that handles ALL universe tickers with watchlist membership, rating priority, sector priority, and data staleness ordering
+- Added skip tracking system for API failures with automatic ticker skipping after 2 consecutive failures for 30 days
+- Enhanced night pipeline architecture with event-gated analysis scheduling combining event-triggered and stale-data queues
+- Database schema updated to include new skip_tickers table functionality for handling API failures gracefully
+- Removed references to old rating-only filtering system that only processed 'Strong Buy' and 'Buy' rated stocks
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -161,9 +158,9 @@ G --> C
 ## Core Components
 - **Automated Pipeline Orchestrator (pipeline.py)**: New 346-line module that provides end-to-end data processing workflows for stock market data, including ingestion, transformation, and output capabilities with automated scheduling, error handling, and **performance optimizations for improved processing speed**. Features night/day pipeline separation with smart scheduling.
 - **Enhanced Ingestion Engine (ingest.py)**: Orchestrates reading from one or more data sources, transforming records, and writing them to the database with significant improvements including batch processing, error handling, retry mechanisms, and logging hooks. Now supports 874+ lines of enhanced functionality with specialized news data processing workflows and **optimized data flow patterns**. Includes technical indicators batch processing.
-- **Sophisticated Enrichment System (enrich.py)**: **New** 254-line module providing rolling batch enrichment with watchlist prioritization, staleness-based scheduling, and smart API rate limit management. Supports fundamentals, analyst targets, and ticker enrichment with configurable limits.
+- **Sophisticated Enrichment System (enrich.py)**: **New** 344-line module providing rolling batch enrichment with watchlist prioritization, staleness-based scheduling, and smart API rate limit management. Supports fundamentals, analyst targets, and ticker enrichment with configurable limits. **Updated**: Completely restructured from rating-filtered processing to sophisticated priority-ordered processing that handles ALL universe tickers with watchlist membership, rating priority, sector priority, and data staleness ordering.
 - **Google Finance Integration (gfinance.py)**: **New** Module providing seamless integration with Google Finance API for real-time and historical financial data retrieval, price updates, and market information.
-- **Advanced Database Layer (db.py)**: Manages connections, transactions, and provides helper functions for executing queries and handling results with 279 lines of expanded functionality. **Updated**: Enhanced with comprehensive schema support for trading configurations, news metadata, user preferences, technical indicators, and portfolio management. Abstracts vendor-specific details behind a consistent interface with **optimized query execution**.
+- **Advanced Database Layer (db.py)**: Manages connections, transactions, and provides helper functions for executing queries and handling results with 364 lines of expanded functionality. **Updated**: Enhanced with comprehensive schema support for trading configurations, news metadata, user preferences, technical indicators, portfolio management, and new skip_tickers table for API failure handling. Abstracts vendor-specific details behind a consistent interface with **optimized query execution**.
 - **DuckDB Vendor Support (analysis/duckdb_vendor.py)**: **New** Specialized vendor implementation for DuckDB database with optimized query execution and analytical capabilities.
 - **Command-Line Interface (__main__.py)**: Provides comprehensive command-line interface to run ingestion jobs, parse arguments, invoke the ingestion engine, and orchestrate the new pipeline with appropriate configuration for production use. **Updated**: Enhanced with night pipeline, enrichment, screening, candidate selection, event detection, and portfolio management commands.
 - **Package Initialization (__init__.py)**: Exposes public APIs for importing ingestion, database utilities, and pipeline orchestration from other modules.
@@ -189,7 +186,7 @@ Key responsibilities:
 - **New**: Sophisticated enrichment system with rolling batch processing and smart scheduling
 - **New**: Night/day pipeline separation with staleness-based optimization
 - **New**: Technical indicators migration to dedicated table with batch processing
-- **New**: Enhanced database schema supporting trading configurations, news metadata, and user preferences
+- **New**: Enhanced database schema supporting trading configurations, news metadata, user preferences, technical indicators, and portfolio management
 - **New**: Google Finance API integration for comprehensive financial data sourcing
 - **New**: DuckDB vendor support for advanced analytical workloads
 - **New**: Comprehensive data processing and reporting capabilities in dump/ directory
@@ -287,39 +284,41 @@ Note over All : Smart scheduling with staleness checks
 ## Detailed Component Analysis
 
 ### Sophisticated Enrichment System (enrich.py)
-**New Component** - 254 lines of rolling batch enrichment with smart scheduling
+**Updated** - 344 lines of rolling batch enrichment with sophisticated priority-ordered scheduling
 
 Responsibilities:
 - Rolling batch enrichment for fundamentals, analyst targets, and ticker data
-- Watchlist prioritization with rating-based filtering
+- **Priority-Ordered Processing**: Processes ALL universe tickers (any rating), ordered by watchlist membership, rating priority, sector priority, and data staleness
+- **Skip Tracking System**: Automatic ticker skipping after 2 consecutive API failures for 30 days
 - Staleness-based scheduling to optimize API usage
 - Configurable batch limits and sector filtering
 - Progress tracking and error handling with retry mechanisms
 - **Smart Scheduling**: Processes oldest-loaded tickers first to maintain data freshness
 
 Processing flow:
-- Load watchlist and build eligible ticker query with rating filters
-- Query database for stale/missing data ordered by last fetched date
+- Load watchlist and build eligible ticker query with priority ordering
+- Query database for stale/missing data ordered by watchlist → rating → sector → staleness
 - Process tickers in batches with API pause between requests
-- Track progress and handle failures gracefully
+- Track progress and handle failures gracefully with skip tracking
 - Return success count for monitoring and logging
 
 ```mermaid
 flowchart TD
 Start(["Start Enrichment"]) --> LoadWatchlist["Load Watchlist"]
-LoadWatchlist --> BuildQuery["Build Eligible Ticker Query"]
+LoadWatchlist --> BuildQuery["Build Priority Query"]
 BuildQuery --> QueryDB["Query Database for Stale Data"]
 QueryDB --> CheckRows{"Rows Found?"}
 CheckRows --> |No| NoEligible["No Eligible Tickers"]
 CheckRows --> |Yes| ProcessBatch["Process Batch"]
 ProcessBatch --> ForEachTicker["For Each Ticker"]
 ForEachTicker --> CheckStaleness["Check Last Fetched Date"]
-CheckStaleness --> IngestData["Ingest Data"]
+CheckStaleness --> CheckSkip["Check Skip Status"]
+CheckSkip --> IngestData["Ingest Data"]
 IngestData --> Success{"Success?"}
 Success --> |Yes| CountSuccess["Count Success"]
-Success --> |No| LogError["Log Error"]
+Success --> |No| RecordMiss["Record Miss (skip if >=2)"]
 CountSuccess --> NextTicker["Next Ticker"]
-LogError --> NextTicker
+RecordMiss --> NextTicker
 NextTicker --> MoreTickers{"More Tickers?"}
 MoreTickers --> |Yes| ForEachTicker
 MoreTickers --> |No| Complete["Complete"]
@@ -334,7 +333,7 @@ Complete --> End
 - [data_eng/enrich.py](file://data_eng/enrich.py)
 
 ### Enhanced Pipeline Architecture (pipeline.py)
-**Updated** - 346 lines with night/day separation and smart scheduling
+**Updated** - 440 lines with night/day separation and smart scheduling
 
 Responsibilities:
 - Dual pipeline architecture with separate day and night operations
@@ -342,13 +341,13 @@ Responsibilities:
 - Coordinated execution of multiple data sources with rate limiting
 - Technical indicators computation and storage
 - Portfolio engine integration with event-driven processing
-- **Night Pipeline**: Handles bulk enrichment operations with rolling batches
+- **Night Pipeline**: Handles bulk enrichment operations with rolling batches and event-gated analysis
 - **Day Pipeline**: Focuses on real-time updates and analysis
 
 Processing flow:
 - Initialize pipeline with configuration parameters
 - Execute day pipeline: prices, news, technicals, AI summaries, screening
-- Execute night pipeline: universe refresh, financials, bulk enrichment
+- Execute night pipeline: universe refresh, financials, bulk enrichment, event-gated analysis
 - Apply smart scheduling to skip fresh data and optimize API usage
 - Generate comprehensive logs and metrics for monitoring
 
@@ -375,7 +374,8 @@ Universe --> Financials["Financials Ingestion"]
 Financials --> Fundamentals["Bulk Fundamentals"]
 Fundamentals --> Analyst["Bulk Analyst Targets"]
 Analyst --> Enriched["Bulk Ticker Enriched"]
-Enriched --> NightComplete["Night Complete"]
+Enriched --> NightAnalysis["Event-Gated Analysis"]
+NightAnalysis --> NightComplete["Night Complete"]
 DayComplete --> End(["End"])
 NightComplete --> End
 ```
@@ -540,14 +540,15 @@ class DuckDBVendor {
 - [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
 
 ### Advanced Database Layer (db.py)
-**Updated** - 279 lines with comprehensive schema support
+**Updated** - 364 lines with comprehensive schema support and skip tracking
 
 Responsibilities:
 - Connection management (connect, close, pool if applicable) with enhanced reliability
 - Transaction control (begin, commit, rollback) with improved error handling
 - Query execution helpers (execute, executemany) with better performance
 - Result mapping and error translation with comprehensive diagnostics
-- **New**: Comprehensive schema support for trading configurations, news metadata, user preferences, technical indicators, and portfolio management
+- **New**: Comprehensive schema support for trading configurations, news metadata, user preferences, technical indicators, portfolio management, and skip_tickers table
+- **New**: Skip tracking system for API failures with automatic ticker skipping after 2 consecutive failures for 30 days
 - **Performance**: Optimized query execution and connection pooling
 
 Common patterns:
@@ -555,7 +556,7 @@ Common patterns:
 - Parameterized queries to prevent injection
 - Vendor-specific adapters behind a unified interface
 - Connection pooling and optimization
-- **New**: Schema migration support for new data models
+- **New**: Schema migration support for new data models including skip_tickers table
 
 ```mermaid
 classDiagram
@@ -576,6 +577,8 @@ class DatabaseManager {
 +support_duckdb_vendor()
 +manage_technical_indicators()
 +handle_portfolio_data()
++track_api_failures()
++manage_skip_tickers()
 }
 ```
 
@@ -651,15 +654,17 @@ Usage pattern:
 - [data_eng/__init__.py](file://data_eng/__init__.py)
 
 ## Enrichment System
-**New Section** - Comprehensive coverage of the sophisticated enrichment system
+**Updated Section** - Comprehensive coverage of the sophisticated enrichment system with priority-ordered processing
 
-The new enrich.py module (254 lines) provides a sophisticated rolling batch enrichment system specifically designed for financial data processing. This component serves as the core engine for managing data freshness and optimizing API usage through intelligent scheduling.
+The new enrich.py module (344 lines) provides a sophisticated rolling batch enrichment system specifically designed for financial data processing. **Updated**: The system has been completely restructured from rating-filtered processing (Strong Buy/Buy only) to sophisticated priority-ordered processing that handles ALL universe tickers with watchlist membership, rating priority, sector priority, and data staleness ordering. This component serves as the core engine for managing data freshness and optimizing API usage through intelligent scheduling.
 
 ### Key Features
-- **Rolling Batch Processing**: Processes tickers in configurable batches with priority ordering
+- **Priority-Ordered Processing**: Processes ALL universe tickers (any rating), ordered by watchlist membership, rating priority, sector priority, and data staleness
 - **Watchlist Prioritization**: Always processes watchlist tickers first regardless of rating
-- **Rating-Based Filtering**: Filters eligible tickers by rating (Strong Buy, Buy)
+- **Rating-Based Priority**: Strong Buy > Buy > Hold > Sell > Underperform > NULL/other
+- **Sector-Based Priority**: technology > industrials > consumer-defensive > healthcare > financial-services > consumer-cyclical > energy > communication-services > utilities > basic-materials > real-estate > unknown
 - **Staleness-Based Scheduling**: Prioritizes tickers with oldest data for refresh
+- **Skip Tracking System**: Automatic ticker skipping after 2 consecutive API failures for 30 days
 - **Sector Filtering**: Optional sector-based filtering for targeted enrichment
 - **Configurable Limits**: Adjustable batch sizes and processing limits
 - **Progress Tracking**: Detailed logging and progress monitoring
@@ -667,12 +672,14 @@ The new enrich.py module (254 lines) provides a sophisticated rolling batch enri
 
 ### Processing Workflow
 1. **Watchlist Loading**: Load watchlist from JSON file with fallback handling
-2. **Eligible Ticker Query**: Build complex SQL query combining watchlist and rating filters
-3. **Staleness Calculation**: Order tickers by last fetched date (oldest first)
-4. **Batch Processing**: Process tickers in configurable batches with API pauses
-5. **Data Ingestion**: Call appropriate ingestion functions for each ticker
-6. **Progress Tracking**: Log progress every 50 tickers with success counts
-7. **Error Management**: Handle failures gracefully without stopping entire batch
+2. **Priority Query Building**: Build complex SQL query with watchlist, rating, sector, and staleness ordering
+3. **Skip Condition Filtering**: Exclude tickers with recent API failures using skip_tickers table
+4. **Staleness Calculation**: Order tickers by last fetched date (oldest first)
+5. **Batch Processing**: Process tickers in configurable batches with API pauses
+6. **Data Ingestion**: Call appropriate ingestion functions for each ticker
+7. **Skip Tracking**: Record API failures and automatically skip problematic tickers
+8. **Progress Tracking**: Log progress every 50 tickers with success counts
+9. **Error Management**: Handle failures gracefully without stopping entire batch
 
 ### Supported Data Types
 - **Fundamentals**: Company fundamentals and financial metrics
@@ -682,8 +689,8 @@ The new enrich.py module (254 lines) provides a sophisticated rolling batch enri
 ```mermaid
 flowchart TD
 Start(["Start Enrichment"]) --> LoadWatchlist["Load Watchlist"]
-LoadWatchlist --> BuildQuery["Build Eligible Query"]
-BuildQuery --> QueryDB["Query Database"]
+LoadWatchlist --> BuildPriorityQuery["Build Priority Query"]
+BuildPriorityQuery --> QueryDB["Query Database"]
 QueryDB --> CheckResults{"Results Found?"}
 CheckResults --> |No| ExitEarly["Exit Early"]
 CheckResults --> |Yes| ProcessBatch["Process Batch"]
@@ -695,10 +702,11 @@ DetermineType --> |Enriched| IngestEnriched["Ingest Ticker Enriched"]
 IngestFundamentals --> SuccessCheck{"Success?"}
 IngestAnalyst --> SuccessCheck
 IngestEnriched --> SuccessCheck
-SuccessCheck --> |Yes| CountSuccess["Count Success"]
-SuccessCheck --> |No| LogError["Log Error"]
+SuccessCheck --> |Yes| ClearMiss["Clear Skip Record"]
+SuccessCheck --> |No| RecordMiss["Record Miss (skip if >=2)"]
+ClearMiss --> CountSuccess["Count Success"]
+RecordMiss --> CountSuccess
 CountSuccess --> NextTicker["Next Ticker"]
-LogError --> NextTicker
 NextTicker --> MoreTickers{"More Tickers?"}
 MoreTickers --> |Yes| ForEachTicker
 MoreTickers --> |No| Complete["Complete"]
@@ -713,9 +721,9 @@ Complete --> End
 - [data_eng/enrich.py](file://data_eng/enrich.py)
 
 ## Enhanced Pipeline Architecture
-**New Section** - Comprehensive coverage of the dual pipeline architecture
+**Updated Section** - Comprehensive coverage of the dual pipeline architecture with event-gated analysis
 
-The enhanced pipeline.py module (346 lines) implements a sophisticated dual pipeline architecture with separate day and night operations, smart scheduling, and comprehensive data processing capabilities. This component serves as the central orchestrator for all data processing workflows.
+The enhanced pipeline.py module (440 lines) implements a sophisticated dual pipeline architecture with separate day and night operations, smart scheduling, and comprehensive data processing capabilities. **Updated**: The night pipeline now includes event-gated analysis scheduling that combines event-triggered and stale-data queues for efficient TradingAgents analysis processing. This component serves as the central orchestrator for all data processing workflows.
 
 ### Key Pipeline Features
 - **Dual Pipeline Architecture**: Separate day and night pipelines for different operational needs
@@ -746,6 +754,7 @@ The enhanced pipeline.py module (346 lines) implements a sophisticated dual pipe
 3. **Fundamentals Enrichment**: Rolling batch enrichment of company fundamentals
 4. **Analyst Targets**: Bulk ingestion of analyst recommendations and targets
 5. **Ticker Enrichment**: Comprehensive enrichment with growth estimates and targets
+6. **Event-Gated Analysis**: TradingAgents analysis with combined event-triggered and stale-data queues
 
 ### Smart Scheduling Implementation
 - **News Staleness**: 1-day threshold for news data freshness
@@ -753,6 +762,13 @@ The enhanced pipeline.py module (346 lines) implements a sophisticated dual pipe
 - **Analyst Staleness**: 3-day threshold for analyst recommendation updates
 - **Fundamentals Staleness**: 7-day threshold for company snapshot data
 - **Financials Staleness**: 80-day cycle based on quarterly reporting schedule
+- **Analysis Staleness**: 7-day threshold for TradingAgents analysis
+
+### Event-Gated Analysis Queue
+- **Event Layer**: Candidates + watchlist pass through existing event gate (price move / technical flip / earnings / never-analyzed)
+- **Stale Layer**: Universe tickers whose last decision is older than ANALYSIS_STALE_DAYS (or never analyzed)
+- **Queue Merge**: Events first, then stale fill; dedupe preserving order
+- **Budget Control**: Limited analyses per night run with rollover to next run
 
 ```mermaid
 flowchart TD
@@ -777,7 +793,8 @@ UniverseRefresh --> Financials["Financials Ingestion"]
 Financials --> Fundamentals["Fundamentals Enrichment"]
 Fundamentals --> AnalystTargets["Analyst Targets"]
 AnalystTargets --> TickerEnriched["Ticker Enrichment"]
-TickerEnriched --> NightComplete["Night Complete"]
+TickerEnriched --> NightAnalysis["Event-Gated Analysis"]
+NightAnalysis --> NightComplete["Night Complete"]
 DayComplete --> End(["End"])
 NightComplete --> End
 ```
@@ -946,9 +963,9 @@ AddToUniverse --> Complete(["Complete"])
 - [data_eng/candidates.py](file://data_eng/candidates.py)
 
 ## Event-Driven Architecture
-**New Section** - Comprehensive coverage of the event-driven system
+**Updated Section** - Comprehensive coverage of the event-driven system with enhanced analysis gating
 
-The events.py module (259 lines) implements an event-driven architecture for real-time market data processing and notification systems. This component enables immediate response to market changes and facilitates asynchronous processing of financial data.
+The events.py module (261 lines) implements an event-driven architecture for real-time market data processing and notification systems. **Updated**: Enhanced with sophisticated analysis gating that combines event-triggered and stale-data queues for efficient TradingAgents analysis processing. This component enables immediate response to market changes and facilitates asynchronous processing of financial data.
 
 ### Event Types
 - **Market Data Events**: Real-time price updates, volume changes, and market movements
@@ -969,6 +986,12 @@ The events.py module (259 lines) implements an event-driven architecture for rea
 - **Technical Signal Changes**: Trade signal changes in technical indicators
 - **News Events**: New article detection since last analysis date
 - **Earnings Events**: New financial filing detection with report dates
+
+### Analysis Gating System
+- **Event Layer**: Candidates + watchlist pass through existing event gate
+- **Stale Layer**: Universe tickers with stale analysis (>7 days or never analyzed)
+- **Queue Merge**: Events first, then stale fill; dedupe preserving order
+- **Budget Control**: Limited analyses per night run with rollover capability
 
 ```mermaid
 sequenceDiagram
@@ -1147,9 +1170,9 @@ class PortfolioReview {
 - [data_eng/portfolio_review.py](file://data_eng/portfolio_review.py)
 
 ## Database Schema Enhancements
-**New Section** - Comprehensive coverage of database schema improvements
+**Updated Section** - Comprehensive coverage of database schema improvements with skip tracking
 
-The database layer has been significantly enhanced with comprehensive schema support for all new system components, providing robust data storage and retrieval capabilities.
+The database layer has been significantly enhanced with comprehensive schema support for all new system components, providing robust data storage and retrieval capabilities. **Updated**: Added new skip_tickers table for handling API failures gracefully with automatic ticker skipping after 2 consecutive failures for 30 days.
 
 ### Core Tables
 - **daily_prices**: OHLCV data with corporate actions (dividends, stock splits)
@@ -1172,6 +1195,13 @@ The database layer has been significantly enhanced with comprehensive schema sup
 - **portfolio_decisions**: Deterministic portfolio engine trade proposals
 - **portfolio_reviews**: LLM-powered portfolio review summaries
 - **stock_universe**: Complete stock universe with ratings and sector information
+
+### Skip Tracking System
+- **skip_tickers**: Tracks tickers that repeatedly returned no data for a source
+- **Automatic Skipping**: After 2 consecutive empty results, ticker is skipped for 30 days
+- **Source-Specific Tracking**: Separate tracking for different data sources (fundamentals, analyst_targets, ticker_enriched, prices)
+- **Retry Window Management**: Automatic retry after configured retry period expires
+- **Graceful Degradation**: System continues operating even with problematic tickers
 
 ### Schema Features
 - **Primary Keys**: Composite keys for efficient querying and data integrity
@@ -1333,6 +1363,7 @@ The enhanced module includes several production-ready features with significant 
 - **Enrichment Retry**: Sophisticated retry mechanisms for enrichment operations
 - **Event Queue Resilience**: Guaranteed message delivery with dead letter queues
 - **Database Failover**: Automatic failover to backup databases
+- **Skip Tracking**: Automatic ticker skipping after API failures prevents cascading errors
 
 ### Scalability and Performance
 - **Horizontal Scaling**: Support for distributed processing
@@ -1356,6 +1387,7 @@ The enhanced module includes several production-ready features with significant 
 - **Enrichment Monitoring**: Tracking of enrichment progress and success rates
 - **Event Processing Metrics**: Real-time event processing statistics
 - **Portfolio Performance**: Portfolio-level performance and risk metrics
+- **Skip Tracking Monitoring**: Visibility into API failure patterns and ticker skipping
 
 ### Security and Compliance
 - **Input Validation**: Comprehensive input validation and sanitization
@@ -1507,6 +1539,7 @@ The enhanced system includes numerous performance optimizations designed for hig
 - **Portfolio Calculations**: Optimized portfolio analytics with cached intermediate results
 - **Screening Algorithms**: Vectorized calculations using NumPy and Pandas
 - **News Processing**: Efficient news aggregation with deduplication and caching
+- **Skip Tracking**: Efficient skip tracking with minimal database overhead
 
 ### Monitoring and Tuning
 - **Performance Metrics**: Comprehensive metrics collection and analysis
@@ -1544,6 +1577,7 @@ Common issues and resolutions have been expanded to cover the new enrichment sys
 - **Candidate Selection**: Verify screening data completeness and correlation calculation parameters
 - **Universe Management**: Check sector data availability and rating classifications with validation
 - **Portfolio Review**: Validate LLM server connectivity and prompt formatting with test endpoints
+- **Skip Tracking**: Monitor skip_tickers table for API failure patterns and retry window management
 
 ### Diagnostic Steps
 - **Enable Verbose Logging**: Configure detailed logging at all pipeline stages with structured output
@@ -1561,6 +1595,7 @@ Common issues and resolutions have been expanded to cover the new enrichment sys
 - **API Rate Limit Monitoring**: Track API usage and rate limit consumption with monitoring dashboards
 - **Progress Tracking**: Monitor enrichment progress with checkpoint logging and status reports
 - **Error Analysis**: Analyze enrichment errors with detailed stack traces and context information
+- **Skip Tracking Analysis**: Monitor skip_tickers table for API failure patterns and retry behavior
 
 ### Performance Diagnostics
 - **Query Performance**: Use EXPLAIN ANALYZE for slow queries with execution plan analysis
@@ -1585,4 +1620,4 @@ Common issues and resolutions have been expanded to cover the new enrichment sys
 - [data_eng/portfolio_engine.py](file://data_eng/portfolio_engine.py)
 
 ## Conclusion
-The enhanced Data Engineering Module provides a clean separation between pipeline orchestration, ingestion, and persistence, enabling robust, configurable, and maintainable data pipelines for production deployments. With the addition of the new sophisticated enrichment system (254 lines), significant enhancements to the pipeline architecture (346 lines with night/day separation), comprehensive technical indicators migration, expanded database operations (279 lines with enhanced schema), comprehensive command-line interface capabilities, **new Google Finance integration module**, **enhanced DuckDB vendor support**, the **comprehensive data processing and reporting module in the dump/ directory**, and the **complete portfolio management system with advanced financial analysis capabilities**, it supports scalable and reliable data workflows for stock market data processing. **Updated**: The module now includes a sophisticated enrichment system with rolling batch processing, smart scheduling for API rate limits, and specialized technical indicator computation. The system features night/day pipeline separation with staleness-based optimization, comprehensive database schema supporting trading configurations, news metadata, user preferences, technical indicators, and portfolio management. **Performance Enhancement**: Recent updates have focused on optimizing processing speed through improved batch handling, memory management, parallel execution strategies, and smart scheduling. **New Capabilities**: The enrichment system provides rolling batch processing with watchlist prioritization, the technical indicators migration optimizes database performance, and the enhanced CLI provides comprehensive pipeline orchestration. **Major Architectural Enhancement**: The complete overhaul introduces sophisticated enrichment with smart scheduling, dual pipeline architecture with night/day separation, technical indicators migration to dedicated tables, comprehensive portfolio management system, candidate selection logic, event-driven architecture, advanced screening capabilities, investment universe management, and portfolio review functionality. The module now includes production-ready features such as automated workflow execution, advanced error handling, performance optimization, monitoring capabilities, deployment automation, Google Finance API integration, DuckDB analytical capabilities, comprehensive financial market analysis tools, complete portfolio management system, event-driven real-time processing, sophisticated investment analysis capabilities, and intelligent data enrichment with rate limit management. Future enhancements can include advanced error recovery, richer metrics, additional source connectors, machine learning integration for intelligent data processing, expanded pipeline orchestration capabilities, enhanced real-time data streaming capabilities, advanced financial modeling capabilities, continued optimization of the enrichment and screening systems, and integration with additional financial data providers.
+The enhanced Data Engineering Module provides a clean separation between pipeline orchestration, ingestion, and persistence, enabling robust, configurable, and maintainable data pipelines for production deployments. With the addition of the new sophisticated enrichment system (344 lines), significant enhancements to the pipeline architecture (440 lines with night/day separation), comprehensive technical indicators migration, expanded database operations (364 lines with enhanced schema), comprehensive command-line interface capabilities, **new Google Finance integration module**, **enhanced DuckDB vendor support**, the **comprehensive data processing and reporting module in the dump/ directory**, and the **complete portfolio management system with advanced financial analysis capabilities**, it supports scalable and reliable data workflows for stock market data processing. **Updated**: The module now includes a sophisticated enrichment system with rolling batch processing, smart scheduling for API rate limits, and specialized technical indicator computation. The system features night/day pipeline separation with staleness-based optimization, comprehensive database schema supporting trading configurations, news metadata, user preferences, technical indicators, and portfolio management. **Performance Enhancement**: Recent updates have focused on optimizing processing speed through improved batch handling, memory management, parallel execution strategies, and smart scheduling. **Major Architectural Enhancement**: The complete overhaul introduces sophisticated enrichment with smart scheduling, dual pipeline architecture with night/day separation, technical indicators migration to dedicated tables, comprehensive portfolio management system, candidate selection logic, event-driven architecture, advanced screening capabilities, investment universe management, and portfolio review functionality. **Critical Update**: The data scheduling and priority system has been completely restructured from rating-filtered processing (Strong Buy/Buy only) to sophisticated priority-ordered processing that handles ALL universe tickers with watchlist membership, rating priority, sector priority, and data staleness ordering. The new skip tracking system automatically handles API failures by skipping problematic tickers after 2 consecutive failures for 30 days. The enhanced night pipeline architecture combines event-gated analysis scheduling with stale-data queues for efficient TradingAgents processing. The module now includes production-ready features such as automated workflow execution, advanced error handling, performance optimization, monitoring capabilities, deployment automation, Google Finance API integration, DuckDB analytical capabilities, comprehensive financial market analysis tools, complete portfolio management system, event-driven real-time processing, sophisticated investment analysis capabilities, and intelligent data enrichment with rate limit management. Future enhancements can include advanced error recovery, richer metrics, additional source connectors, machine learning integration for intelligent data processing, expanded pipeline orchestration capabilities, enhanced real-time data streaming capabilities, advanced financial modeling capabilities, continued optimization of the enrichment and screening systems, and integration with additional financial data providers.

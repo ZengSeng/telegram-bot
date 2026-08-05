@@ -10,13 +10,11 @@ from datetime import date
 
 import requests
 
+from stock_bot.config import LLAMA_MODEL, LLAMA_URL
+
 from .db import get_connection
 
 log = logging.getLogger(__name__)
-
-# Local llama.cpp endpoint (same as stock_bot/config.py)
-LLAMA_URL = "http://127.0.0.1:10000/v1/chat/completions"
-LLAMA_MODEL = "MyQwythos"
 
 
 # ---------------------------------------------------------------------------
@@ -65,8 +63,8 @@ def _load_ta_summaries() -> dict[str, str]:
 # LLM call
 # ---------------------------------------------------------------------------
 
-def _ask_llm(system: str, user: str) -> str:
-    """Call local llama-server. Returns reply text or error string."""
+def _ask_llm(system: str, user: str) -> str | None:
+    """Call local llama-server. Returns reply text, or None on failure."""
     try:
         resp = requests.post(
             LLAMA_URL,
@@ -84,10 +82,10 @@ def _ask_llm(system: str, user: str) -> str:
         return resp.json()["choices"][0]["message"]["content"].strip()
     except requests.ConnectionError:
         log.warning("Portfolio review: LLM server not reachable at %s", LLAMA_URL)
-        return "(LLM server not available — skipping review)"
+        return None
     except Exception as e:
         log.error("Portfolio review: LLM request failed: %s", e)
-        return f"(LLM review failed: {e})"
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -138,13 +136,6 @@ def _build_prompt(decisions: list[dict], summaries: dict[str, str]) -> str:
             lines.append(f"- **{d['ticker']}** ({pct}): {d.get('reason', '')}")
         lines.append("")
 
-    # Sector breakdown
-    sector_pct: dict[str, float] = {}
-    for d in decisions:
-        if d.get("position_pct"):
-            # We don't have sector here, but we can note the tickers
-            pass
-
     lines.append(
         "## Your Task\n"
         "Review these decisions. Flag:\n"
@@ -181,10 +172,9 @@ def run_portfolio_review(review_date: date | None = None) -> str:
     log.info("Portfolio review: asking LLM to review %d decisions...", len(decisions))
     review_text = _ask_llm(SYSTEM_PROMPT, prompt)
 
-    if review_text.startswith("("):
-        # LLM error — don't store
-        log.warning("Portfolio review: %s", review_text)
-        return review_text
+    if review_text is None:
+        # LLM error (already logged) — nothing to store
+        return ""
 
     # Store review
     _store_review(today, review_text)

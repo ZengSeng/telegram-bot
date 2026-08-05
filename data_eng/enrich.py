@@ -13,17 +13,15 @@ This spreads the refresh across runs instead of one big staleness wave.
 
 import logging
 import time
-from pathlib import Path
 
 from .db import SKIP_ATTEMPT_THRESHOLD, SKIP_RETRY_DAYS, clear_miss, get_connection, record_miss
 from .ingest import API_PAUSE, ingest_fundamentals, ingest_analyst_targets, ingest_enriched
+from .watchlist import load_watchlist
 
 log = logging.getLogger(__name__)
 
 # Default batch size per run
 DEFAULT_LIMIT = 100
-
-WATCHLIST_FILE = Path(__file__).parent.parent / "data" / "watchlist.json"
 
 # Rating priority (lower = processed first); NULL/NaN/unmatched ratings last
 RATING_PRIORITY_SQL = """
@@ -54,17 +52,6 @@ SECTOR_PRIORITY_SQL = """
         ELSE 12
     END
 """
-
-
-def _load_watchlist() -> list[str]:
-    """Load watchlist tickers."""
-    if WATCHLIST_FILE.exists():
-        import json
-        try:
-            return json.loads(WATCHLIST_FILE.read_text())
-        except Exception:
-            pass
-    return []
 
 
 # ---------------------------------------------------------------------------
@@ -155,6 +142,66 @@ def _build_priority_query(
     return query, params
 
 
+def _run_bulk_loop(
+    name: str,
+    target_table: str,
+    watchlist: list[str],
+    sector: str | None,
+    limit: int,
+    stale_days: int | None,
+    skip_source: str | None,
+    skip_retry_days: int,
+    ingest_fn,
+) -> int:
+    """Shared priority-ordered bulk ingestion loop.
+
+    Runs ingest_fn over the next batch of tickers selected by
+    _build_priority_query, records/clears no-data misses, and rate-limits
+    with API_PAUSE. Returns the number of successful tickers.
+    """
+    query, params = _build_priority_query(
+        target_table, watchlist, sector, limit, stale_days,
+        skip_source, skip_retry_days,
+    )
+
+    conn = get_connection()
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+
+    if not rows:
+        log.info("%s: no eligible tickers to process.", name)
+        return 0
+
+    log.info("%s: processing %d tickers (limit=%d)", name, len(rows), limit)
+
+    success = 0
+    for i, (ticker, last_fetched) in enumerate(rows, 1):
+        status = "never loaded" if last_fetched is None else f"last: {last_fetched}"
+        log.info("%s [%d/%d]: %s (%s)", name, i, len(rows), ticker, status)
+
+        try:
+            # ingest_fundamentals/enriched return a bool and analyst_targets
+            # returns a row count — both are truthy exactly on success.
+            result = ingest_fn(ticker)
+            if result:
+                success += 1
+                if skip_source:
+                    clear_miss(ticker, skip_source)
+            elif skip_source:
+                # Genuine "no data" (fetch errors raise instead)
+                record_miss(ticker, skip_source)
+        except Exception as e:
+            log.warning("%s: failed for %s: %s", name, ticker, e)
+
+        time.sleep(API_PAUSE)
+
+        if i % 50 == 0:
+            log.info("%s: progress %d/%d (%d ok)", name, i, len(rows), success)
+
+    log.info("%s: complete — %d/%d succeeded", name, success, len(rows))
+    return success
+
+
 # ---------------------------------------------------------------------------
 # Fundamentals enrichment (night pipeline)
 # ---------------------------------------------------------------------------
@@ -181,48 +228,11 @@ def run_enrich(
     Returns:
         Number of tickers successfully enriched.
     """
-    watchlist = _load_watchlist()
-    query, params = _build_priority_query(
-        "fundamentals", watchlist, sector, limit, stale_days,
-        skip_source, skip_retry_days,
+    watchlist = load_watchlist() or []
+    return _run_bulk_loop(
+        "Enrich", "fundamentals", watchlist, sector, limit,
+        stale_days, skip_source, skip_retry_days, ingest_fundamentals,
     )
-
-    conn = get_connection()
-    rows = conn.execute(query, params).fetchall()
-    conn.close()
-
-    if not rows:
-        log.info("Enrich: no eligible tickers to process.")
-        return 0
-
-    log.info("Enrich: processing %d tickers (limit=%d, sector=%s)",
-             len(rows), limit, sector or "all")
-
-    success = 0
-    for i, (ticker, last_fetched) in enumerate(rows, 1):
-        status = "never loaded" if last_fetched is None else f"last: {last_fetched}"
-        log.info("Enrich [%d/%d]: %s (%s)", i, len(rows), ticker, status)
-
-        try:
-            ok = ingest_fundamentals(ticker)
-            if ok:
-                success += 1
-                if skip_source:
-                    clear_miss(ticker, skip_source)
-            elif skip_source:
-                # Genuine "no data" (fetch errors raise instead)
-                record_miss(ticker, skip_source)
-        except Exception as e:
-            log.warning("Enrich: failed for %s: %s", ticker, e)
-
-        time.sleep(API_PAUSE)
-
-        # Progress checkpoint
-        if i % 50 == 0:
-            log.info("Enrich: progress %d/%d (%d ok)", i, len(rows), success)
-
-    log.info("Enrich: complete — %d/%d succeeded", success, len(rows))
-    return success
 
 
 # ---------------------------------------------------------------------------
@@ -243,45 +253,10 @@ def bulk_analyst_targets(
     stale_days: skip tickers loaded within this many days (None = no skip).
     skip_source: skip_tickers source to filter/record (None disables).
     """
-    query, params = _build_priority_query(
-        "analyst_targets", watchlist, None, limit, stale_days,
-        skip_source, skip_retry_days,
+    return _run_bulk_loop(
+        "Bulk analyst", "analyst_targets", watchlist, None, limit,
+        stale_days, skip_source, skip_retry_days, ingest_analyst_targets,
     )
-
-    conn = get_connection()
-    rows = conn.execute(query, params).fetchall()
-    conn.close()
-
-    if not rows:
-        log.info("Bulk analyst: no eligible tickers to process.")
-        return 0
-
-    log.info("Bulk analyst: processing %d tickers (limit=%d)", len(rows), limit)
-
-    success = 0
-    for i, (ticker, last_fetched) in enumerate(rows, 1):
-        status = "never loaded" if last_fetched is None else f"last: {last_fetched}"
-        log.info("Bulk analyst [%d/%d]: %s (%s)", i, len(rows), ticker, status)
-
-        try:
-            count = ingest_analyst_targets(ticker)
-            if count > 0:
-                success += 1
-                if skip_source:
-                    clear_miss(ticker, skip_source)
-            elif skip_source:
-                # Fetched fine but nothing came back
-                record_miss(ticker, skip_source)
-        except Exception as e:
-            log.warning("Bulk analyst: failed for %s: %s", ticker, e)
-
-        time.sleep(API_PAUSE)
-
-        if i % 50 == 0:
-            log.info("Bulk analyst: progress %d/%d (%d ok)", i, len(rows), success)
-
-    log.info("Bulk analyst: complete — %d/%d succeeded", success, len(rows))
-    return success
 
 
 # ---------------------------------------------------------------------------
@@ -302,42 +277,7 @@ def bulk_enriched(
     stale_days: skip tickers loaded within this many days (None = no skip).
     skip_source: skip_tickers source to filter/record (None disables).
     """
-    query, params = _build_priority_query(
-        "ticker_enriched", watchlist, None, limit, stale_days,
-        skip_source, skip_retry_days,
+    return _run_bulk_loop(
+        "Bulk enriched", "ticker_enriched", watchlist, None, limit,
+        stale_days, skip_source, skip_retry_days, ingest_enriched,
     )
-
-    conn = get_connection()
-    rows = conn.execute(query, params).fetchall()
-    conn.close()
-
-    if not rows:
-        log.info("Bulk enriched: no eligible tickers to process.")
-        return 0
-
-    log.info("Bulk enriched: processing %d tickers (limit=%d)", len(rows), limit)
-
-    success = 0
-    for i, (ticker, last_fetched) in enumerate(rows, 1):
-        status = "never loaded" if last_fetched is None else f"last: {last_fetched}"
-        log.info("Bulk enriched [%d/%d]: %s (%s)", i, len(rows), ticker, status)
-
-        try:
-            ok = ingest_enriched(ticker)
-            if ok:
-                success += 1
-                if skip_source:
-                    clear_miss(ticker, skip_source)
-            elif skip_source:
-                # Fetched fine but nothing came back
-                record_miss(ticker, skip_source)
-        except Exception as e:
-            log.warning("Bulk enriched: failed for %s: %s", ticker, e)
-
-        time.sleep(API_PAUSE)
-
-        if i % 50 == 0:
-            log.info("Bulk enriched: progress %d/%d (%d ok)", i, len(rows), success)
-
-    log.info("Bulk enriched: complete — %d/%d succeeded", success, len(rows))
-    return success

@@ -1,9 +1,7 @@
 """CLI entrypoint: python -m data_eng TICKER [TICKER2 ...] | --batch | --daily"""
 
 import argparse
-import json
 import logging
-from pathlib import Path
 
 from .ingest import batch_ingest_prices, ingest_all
 from .pipeline import run_daily_pipeline, run_night_pipeline, run_universe_build, run_universe_group
@@ -13,20 +11,12 @@ from .events import detect_events_batch
 from .portfolio_engine import run_portfolio_engine
 from .portfolio_review import run_portfolio_review
 from .enrich import run_enrich
+from .watchlist import load_watchlist
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
-
-WATCHLIST_FILE = Path(__file__).parent.parent / "data" / "watchlist.json"
-
-
-def _load_watchlist() -> list[str]:
-    """Load watchlist tickers from data/watchlist.json."""
-    if WATCHLIST_FILE.exists():
-        return json.loads(WATCHLIST_FILE.read_text())
-    return []
 
 
 def main():
@@ -100,7 +90,7 @@ def main():
 
     if args.night:
         print("Running night pipeline (universe + financials + bulk enrichment + analyses)...")
-        watchlist = _load_watchlist()
+        watchlist = load_watchlist() or []
         from .pipeline import NIGHT_ANALYSIS_LIMIT
         run_night_pipeline(
             tickers=watchlist,
@@ -116,14 +106,14 @@ def main():
         print(f"Building universe group {args.universe_group}...")
         run_universe_group(args.universe_group)
     elif args.daily:
-        tickers = _load_watchlist()
+        tickers = load_watchlist() or []
         if not tickers:
             print("Watchlist is empty. Add tickers via /watch or edit data/watchlist.json")
             return
         print(f"Running daily pipeline for: {', '.join(tickers)}")
         run_daily_pipeline(tickers)
     elif args.daily_smart:
-        tickers = _load_watchlist()
+        tickers = load_watchlist() or []
         if not tickers:
             print("Watchlist is empty. Add tickers via /watch or edit data/watchlist.json")
             return
@@ -148,7 +138,7 @@ def main():
         else:
             print("No candidates selected (run --screen first).")
     elif args.events:
-        tickers = _load_watchlist()
+        tickers = load_watchlist() or []
         if not tickers:
             print("Watchlist is empty.")
             return
@@ -186,7 +176,7 @@ def main():
         count = run_enrich(sector=args.sector, limit=args.limit)
         print(f"Done: {count} tickers enriched.")
     elif args.batch:
-        tickers = _load_watchlist()
+        tickers = load_watchlist() or []
         if not tickers:
             print("Watchlist is empty. Add tickers via /watch or edit data/watchlist.json")
             return

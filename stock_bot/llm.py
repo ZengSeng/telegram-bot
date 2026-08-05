@@ -1,6 +1,5 @@
 """LLM server management, transcription, and AI request helpers."""
 
-import atexit
 import base64
 import datetime as dt
 import json
@@ -12,6 +11,7 @@ import requests
 
 from .config import (
     LLAMA_CMD,
+    LLAMA_MODEL,
     LLAMA_STARTUP_WAIT_SECONDS,
     LLAMA_URL,
     LOG_FILE,
@@ -47,12 +47,16 @@ def start_llama_server() -> None:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    # atexit.register(stop_llama_server)  # keep for production
+    # NOTE: the server is deliberately NOT stopped on bot exit — it is
+    # expensive to reload the model, and start_llama_server() reuses a
+    # running instance via _is_server_running(). No atexit hook on purpose.
     log.info("Waiting %ss for the model to load...", LLAMA_STARTUP_WAIT_SECONDS)
     time.sleep(LLAMA_STARTUP_WAIT_SECONDS)
 
 
 def stop_llama_server() -> None:
+    """Stop the server this process spawned (unused by default; kept for
+    manual shutdown tooling)."""
     if llama_process is not None and llama_process.poll() is None:
         log.info("Stopping llama server...")
         llama_process.terminate()
@@ -83,13 +87,17 @@ def transcribe(wav_path: Path) -> str:
     return result.stdout.strip()
 
 
-def ask_llm(user_text: str) -> str:
-    """Send text to the local llama-server and return its reply."""
+def ask_llm(user_text: str) -> str | None:
+    """Send text to the local llama-server and return its reply.
+
+    Returns None if the server is unreachable, so callers can distinguish a
+    real (possibly empty) reply from a transport failure.
+    """
     try:
         resp = requests.post(
             LLAMA_URL,
             json={
-                "model": "MyQwythos",
+                "model": LLAMA_MODEL,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_text},
@@ -101,7 +109,7 @@ def ask_llm(user_text: str) -> str:
         return resp.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
         log.error("LLM request failed: %s", e)
-        return "(couldn't reach the AI server)"
+        return None
 
 
 def ask_llm_vision(image_path: Path, prompt: str) -> str:
@@ -113,7 +121,7 @@ def ask_llm_vision(image_path: Path, prompt: str) -> str:
         resp = requests.post(
             LLAMA_URL,
             json={
-                "model": "MyQwythos",
+                "model": LLAMA_MODEL,
                 "messages": [
                     {
                         "role": "user",

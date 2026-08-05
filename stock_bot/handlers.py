@@ -109,13 +109,24 @@ async def watch_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         f"Starting full data ingestion for {ticker} (background)..."
     )
 
-    # Trigger full ingestion in background
+    # Trigger full ingestion in background; log + notify on failure so a
+    # crash doesn't silently leave the user believing ingestion succeeded.
     import asyncio
     from data_eng.ingest import ingest_all
 
     async def _run_ingestion():
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, ingest_all, ticker)
+        try:
+            await loop.run_in_executor(None, ingest_all, ticker)
+        except Exception as e:
+            log.error("Background ingestion failed for %s: %s", ticker, e)
+            try:
+                await update.message.reply_text(
+                    f"Ingestion for {ticker} failed: {e}\n"
+                    "It is on the watchlist and will be picked up by the pipeline."
+                )
+            except Exception:
+                pass
 
     asyncio.ensure_future(_run_ingestion())
 
@@ -367,13 +378,13 @@ async def gains_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         if details["matched"]:
             lines.append("  Realized (FIFO matched):")
             for m in details["matched"]:
-                gain_sign = "+" if m["gain"] >= 0 else ""
+                gain_sign = "+" if m["gain"] >= 0 else "-"
                 lines.append(
                     f"    Sold {m['shares']:.0f} @ ${m['sell_price']:.2f} "
-                    f"(bought @ ${m['buy_price']:.2f}) -> {gain_sign}${m['gain']:.2f}"
+                    f"(bought @ ${m['buy_price']:.2f}) -> {gain_sign}${abs(m['gain']):.2f}"
                 )
-            total_sign = "+" if details["realized_total"] >= 0 else ""
-            lines.append(f"  Total Realized: {total_sign}${details['realized_total']:.2f}")
+            total_sign = "+" if details["realized_total"] >= 0 else "-"
+            lines.append(f"  Total Realized: {total_sign}${abs(details['realized_total']):.2f}")
         else:
             lines.append("  Realized: No sells yet")
 
@@ -385,10 +396,11 @@ async def gains_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             if current_price:
                 unrealized = total_open_shares * (current_price - avg_open)
                 unrealized_pct = ((current_price - avg_open) / avg_open * 100) if avg_open > 0 else 0
-                u_sign = "+" if unrealized >= 0 else ""
+                u_sign = "+" if unrealized >= 0 else "-"
                 lines.append(
                     f"  Unrealized: {total_open_shares:.0f} shares @ avg ${avg_open:.2f}, "
-                    f"current ${current_price:.2f} -> {u_sign}${unrealized:.2f} ({u_sign}{unrealized_pct:.1f}%)"
+                    f"current ${current_price:.2f} -> {u_sign}${abs(unrealized):.2f} "
+                    f"({u_sign}{abs(unrealized_pct):.1f}%)"
                 )
             else:
                 lines.append(
@@ -434,6 +446,9 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     reply = llm.ask_llm(transcript)
+    if reply is None:
+        await update.message.reply_text("Sorry, the AI server isn't responding right now.")
+        return
     llm.log_entry("voice", transcript, reply, ogg_path.name)
     await update.message.reply_text(reply)
 
@@ -444,6 +459,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     reply = llm.ask_llm(user_text)
+    if reply is None:
+        await update.message.reply_text("Sorry, the AI server isn't responding right now.")
+        return
     llm.log_entry("text", user_text, reply)
     await update.message.reply_text(reply)
 

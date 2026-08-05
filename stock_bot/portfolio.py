@@ -125,22 +125,6 @@ def get_price_targets(tickers: list[str]) -> dict[str, float]:
     return targets
 
 
-def get_ticker_name(ticker: str) -> str:
-    """Get the company name from DuckDB fundamentals."""
-    try:
-        conn = get_connection()
-        row = conn.execute(
-            "SELECT name FROM fundamentals WHERE ticker = ? ORDER BY date_fetched DESC LIMIT 1",
-            [ticker],
-        ).fetchone()
-        conn.close()
-        if row and row[0]:
-            return row[0]
-    except Exception:
-        pass
-    return ticker
-
-
 # ---------------------------------------------------------------------------
 # Ticker extraction
 # ---------------------------------------------------------------------------
@@ -163,73 +147,101 @@ def extract_ticker(stock_field: str) -> str:
 # Portfolio computation (FIFO)
 # ---------------------------------------------------------------------------
 
+def _build_lots(buys: list[dict]) -> list[dict]:
+    """Convert buy trades (already sorted by order_placed) into FIFO lots."""
+    lots = []
+    for b in buys:
+        try:
+            shares = float(b.get("shares", 0))
+            price = float(b.get("price_per_share_usd", 0))
+            fee = float(b.get("transaction_fee_usd", 0))
+        except (ValueError, TypeError):
+            continue
+        if shares > 0:
+            lots.append({
+                "shares_remaining": shares,
+                "price": price,
+                "fee_per_share": fee / shares,
+                "date": b.get("order_placed", "")[:10],
+            })
+    return lots
+
+
+def _match_fifo(lots: list[dict], sells: list[dict]) -> list[dict]:
+    """Match sells (sorted by order_placed) against lots, oldest first.
+
+    Mutates the lots' shares_remaining in place and returns one record per
+    partial/full lot match: {shares, buy_price, sell_price, buy_date, gain}.
+    Fees are amortized per share on both sides.
+    """
+    matched = []
+    for s in sells:
+        try:
+            sell_shares = float(s.get("shares", 0))
+            sell_price = float(s.get("price_per_share_usd", 0))
+            sell_fee = float(s.get("transaction_fee_usd", 0))
+        except (ValueError, TypeError):
+            continue
+
+        fee_per_sell_share = sell_fee / sell_shares if sell_shares > 0 else 0
+        remaining_to_sell = sell_shares
+
+        for lot in lots:
+            if remaining_to_sell <= 0:
+                break
+            m = min(lot["shares_remaining"], remaining_to_sell)
+            if m > 0:
+                buy_cost = lot["price"] + lot["fee_per_share"]
+                sell_net = sell_price - fee_per_sell_share
+                matched.append({
+                    "shares": m,
+                    "buy_price": lot["price"],
+                    "sell_price": sell_price,
+                    "buy_date": lot["date"],
+                    "gain": m * (sell_net - buy_cost),
+                })
+                lot["shares_remaining"] -= m
+                remaining_to_sell -= m
+    return matched
+
+
+def _sorted_trades(trades: list[dict], ticker: str | None = None):
+    """Split trades into (buys, sells) for one ticker (or all), sorted by date."""
+    buys, sells = [], []
+    for trade in trades:
+        t = extract_ticker(trade.get("stock", ""))
+        if not t or (ticker is not None and t != ticker):
+            continue
+        ttype = trade.get("transaction_type", "").lower().strip()
+        if ttype == "buy":
+            buys.append((t, trade))
+        elif ttype == "sell":
+            sells.append((t, trade))
+    key = lambda item: item[1].get("order_placed", "")
+    buys.sort(key=key)
+    sells.sort(key=key)
+    return buys, sells
+
+
 def compute_portfolio(trades: list[dict]) -> dict[str, dict]:
     """
     Compute per-stock portfolio stats using FIFO for cost basis.
     Returns {ticker: {shares, avg_cost, total_invested, realized_gain}}
     """
+    buys, sells = _sorted_trades(trades)
+
     buys_by_ticker: dict[str, list[dict]] = defaultdict(list)
     sells_by_ticker: dict[str, list[dict]] = defaultdict(list)
+    for t, trade in buys:
+        buys_by_ticker[t].append(trade)
+    for t, trade in sells:
+        sells_by_ticker[t].append(trade)
 
-    for trade in trades:
-        ticker = extract_ticker(trade.get("stock", ""))
-        if not ticker:
-            continue
-        ttype = trade.get("transaction_type", "").lower().strip()
-        if ttype == "buy":
-            buys_by_ticker[ticker].append(trade)
-        elif ttype == "sell":
-            sells_by_ticker[ticker].append(trade)
-
-    for ticker in buys_by_ticker:
-        buys_by_ticker[ticker].sort(key=lambda t: t.get("order_placed", ""))
-    for ticker in sells_by_ticker:
-        sells_by_ticker[ticker].sort(key=lambda t: t.get("order_placed", ""))
-
-    all_tickers = set(list(buys_by_ticker.keys()) + list(sells_by_ticker.keys()))
     portfolio = {}
-
-    for ticker in all_tickers:
-        buys = buys_by_ticker.get(ticker, [])
-        sells = sells_by_ticker.get(ticker, [])
-
-        lots = []
-        for b in buys:
-            try:
-                shares = float(b.get("shares", 0))
-                price = float(b.get("price_per_share_usd", 0))
-                fee = float(b.get("transaction_fee_usd", 0))
-            except (ValueError, TypeError):
-                continue
-            if shares > 0:
-                lots.append({
-                    "shares_remaining": shares,
-                    "price": price,
-                    "fee_per_share": fee / shares if shares > 0 else 0,
-                })
-
-        realized_gain = 0.0
-        for s in sells:
-            try:
-                sell_shares = float(s.get("shares", 0))
-                sell_price = float(s.get("price_per_share_usd", 0))
-                sell_fee = float(s.get("transaction_fee_usd", 0))
-            except (ValueError, TypeError):
-                continue
-
-            fee_per_sell_share = sell_fee / sell_shares if sell_shares > 0 else 0
-            remaining_to_sell = sell_shares
-
-            for lot in lots:
-                if remaining_to_sell <= 0:
-                    break
-                matched = min(lot["shares_remaining"], remaining_to_sell)
-                if matched > 0:
-                    buy_cost_per_share = lot["price"] + lot["fee_per_share"]
-                    sell_net_per_share = sell_price - fee_per_sell_share
-                    realized_gain += matched * (sell_net_per_share - buy_cost_per_share)
-                    lot["shares_remaining"] -= matched
-                    remaining_to_sell -= matched
+    for ticker in set(buys_by_ticker) | set(sells_by_ticker):
+        lots = _build_lots(buys_by_ticker.get(ticker, []))
+        matched = _match_fifo(lots, sells_by_ticker.get(ticker, []))
+        realized_gain = sum(m["gain"] for m in matched)
 
         open_shares = sum(lot["shares_remaining"] for lot in lots)
         if open_shares > 0:
@@ -242,7 +254,7 @@ def compute_portfolio(trades: list[dict]) -> dict[str, dict]:
             avg_cost = 0.0
 
         total_invested = 0.0
-        for b in buys:
+        for b in buys_by_ticker.get(ticker, []):
             try:
                 total_invested += float(b.get("amount_usd", 0))
             except (ValueError, TypeError):
@@ -263,66 +275,9 @@ def compute_fifo_details(trades: list[dict], ticker: str) -> dict:
     Compute detailed FIFO matching for a specific ticker.
     Returns {matched: [...], open_lots: [...], realized_total: float}
     """
-    buys = []
-    sells = []
-    for trade in trades:
-        t = extract_ticker(trade.get("stock", ""))
-        if t != ticker:
-            continue
-        ttype = trade.get("transaction_type", "").lower().strip()
-        if ttype == "buy":
-            buys.append(trade)
-        elif ttype == "sell":
-            sells.append(trade)
-
-    buys.sort(key=lambda t: t.get("order_placed", ""))
-    sells.sort(key=lambda t: t.get("order_placed", ""))
-
-    lots = []
-    for b in buys:
-        try:
-            shares = float(b.get("shares", 0))
-            price = float(b.get("price_per_share_usd", 0))
-            fee = float(b.get("transaction_fee_usd", 0))
-        except (ValueError, TypeError):
-            continue
-        if shares > 0:
-            lots.append({
-                "shares_remaining": shares,
-                "price": price,
-                "fee_per_share": fee / shares if shares > 0 else 0,
-                "date": b.get("order_placed", "")[:10],
-            })
-
-    matched = []
-    for s in sells:
-        try:
-            sell_shares = float(s.get("shares", 0))
-            sell_price = float(s.get("price_per_share_usd", 0))
-            sell_fee = float(s.get("transaction_fee_usd", 0))
-        except (ValueError, TypeError):
-            continue
-
-        fee_per_sell_share = sell_fee / sell_shares if sell_shares > 0 else 0
-        remaining_to_sell = sell_shares
-
-        for lot in lots:
-            if remaining_to_sell <= 0:
-                break
-            m = min(lot["shares_remaining"], remaining_to_sell)
-            if m > 0:
-                buy_cost = lot["price"] + lot["fee_per_share"]
-                sell_net = sell_price - fee_per_sell_share
-                gain = m * (sell_net - buy_cost)
-                matched.append({
-                    "shares": m,
-                    "buy_price": lot["price"],
-                    "sell_price": sell_price,
-                    "buy_date": lot["date"],
-                    "gain": gain,
-                })
-                lot["shares_remaining"] -= m
-                remaining_to_sell -= m
+    buys, sells = _sorted_trades(trades, ticker)
+    lots = _build_lots([trade for _, trade in buys])
+    matched = _match_fifo(lots, [trade for _, trade in sells])
 
     open_lots = [
         {"shares": lot["shares_remaining"], "price": lot["price"], "date": lot["date"]}

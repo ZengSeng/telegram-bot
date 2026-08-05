@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta
 import numpy as np
 import pandas as pd
 import requests
+
 import yfinance as yf
 from bs4 import BeautifulSoup
 
@@ -816,6 +817,30 @@ def batch_ingest_prices(tickers: list[str], lookback_days: int = 3 * 365) -> int
     return total_rows
 
 
+def _insert_price_rows(conn, ticker: str, sub: pd.DataFrame, start_date: date) -> int:
+    """Normalize a yfinance sub-frame and insert its rows. Returns row count."""
+    if sub.index.tz is not None:
+        sub.index = sub.index.tz_localize(None)
+    rows = []
+    for idx, row in sub.iterrows():
+        d = idx.date()
+        if d < start_date:
+            continue
+        if pd.isna(row.get("Close")):
+            continue
+        div = float(row.get("Dividends", 0) or 0)
+        split = float(row.get("Stock Splits", 0) or 0)
+        rows.append((ticker, d, round(row["Open"], 2), round(row["High"], 2),
+                     round(row["Low"], 2), round(row["Close"], 2), int(row["Volume"]),
+                     div, split))
+    if rows:
+        conn.executemany(
+            """INSERT OR REPLACE INTO daily_prices
+               (ticker, date, open, high, low, close, volume, dividends, stock_splits)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", rows)
+    return len(rows)
+
+
 def _download_and_insert(
     conn, batch_tickers: list[str], start: date, end: date, to_download: list[tuple]
 ) -> tuple[int, list]:
@@ -854,30 +879,8 @@ def _download_and_insert(
         # ticker when group_by="ticker"; flatten to the ticker's sub-frame.
         ticker = batch_tickers[0]
         start_date = dict(to_download)[ticker]
-        if isinstance(data.columns, pd.MultiIndex):
-            df = data[ticker].copy()
-        else:
-            df = data.copy()
-        if df.index.tz is not None:
-            df.index = df.index.tz_localize(None)
-        rows = []
-        for idx, row in df.iterrows():
-            d = idx.date()
-            if d < start_date:
-                continue
-            if pd.isna(row.get("Close")):
-                continue
-            div = float(row.get("Dividends", 0) or 0)
-            split = float(row.get("Stock Splits", 0) or 0)
-            rows.append((ticker, d, round(row["Open"], 2), round(row["High"], 2),
-                         round(row["Low"], 2), round(row["Close"], 2), int(row["Volume"]),
-                         div, split))
-        if rows:
-            conn.executemany(
-                """INSERT OR REPLACE INTO daily_prices
-                   (ticker, date, open, high, low, close, volume, dividends, stock_splits)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", rows)
-            total_rows += len(rows)
+        df = data[ticker].copy() if isinstance(data.columns, pd.MultiIndex) else data.copy()
+        total_rows += _insert_price_rows(conn, ticker, df, start_date)
     else:
         # Multi-ticker: columns are MultiIndex (ticker, field)
         for ticker, start_date in to_download:
@@ -892,26 +895,7 @@ def _download_and_insert(
                 # Present but all-NaN (rate-limited / no data)
                 missing.append((ticker, start_date))
                 continue
-            if sub.index.tz is not None:
-                sub.index = sub.index.tz_localize(None)
-            rows = []
-            for idx, row in sub.iterrows():
-                d = idx.date()
-                if d < start_date:
-                    continue
-                if pd.isna(row.get("Close")):
-                    continue
-                div = float(row.get("Dividends", 0) or 0)
-                split = float(row.get("Stock Splits", 0) or 0)
-                rows.append((ticker, d, round(row["Open"], 2), round(row["High"], 2),
-                             round(row["Low"], 2), round(row["Close"], 2), int(row["Volume"]),
-                             div, split))
-            if rows:
-                conn.executemany(
-                    """INSERT OR REPLACE INTO daily_prices
-                       (ticker, date, open, high, low, close, volume, dividends, stock_splits)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", rows)
-                total_rows += len(rows)
+            total_rows += _insert_price_rows(conn, ticker, sub, start_date)
 
     return total_rows, missing
 

@@ -150,7 +150,7 @@ def generate_news_summaries(tickers: list[str] | None = None) -> dict[str, str]:
         summary = ask_llm(prompt)
 
         # Skip if LLM was unreachable
-        if summary.startswith("(couldn't reach"):
+        if summary is None:
             log.warning("LLM unavailable, skipping summary for %s", ticker)
             continue
 

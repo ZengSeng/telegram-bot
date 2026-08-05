@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from .db import get_connection
+from .utils import safe_float as _safe_float
 
 log = logging.getLogger(__name__)
 
@@ -242,7 +243,6 @@ def compute_raw_metrics(tickers: list[str]) -> pd.DataFrame:
 
     # Above 200 MA: binary (latest close > day200_avg)
     if "day200_avg" in fund.columns and not price.empty:
-        latest_close = price.reindex(metrics.index).get("return_3m")  # placeholder
         # Get latest close from price data
         conn = get_connection()
         placeholders = ", ".join("?" for _ in metrics.index.tolist())
@@ -425,12 +425,3 @@ def _store_scores(scores: pd.DataFrame) -> None:
     conn.close()
     log.info("Screener: stored %d scores for %s", len(rows), today)
 
-
-def _safe_float(val) -> float | None:
-    """Convert to float, returning None for NaN/inf."""
-    if val is None:
-        return None
-    f = float(val)
-    if np.isnan(f) or np.isinf(f):
-        return None
-    return round(f, 2)

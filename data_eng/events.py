@@ -50,24 +50,6 @@ def _check_price_move(ticker: str) -> dict | None:
     return None
 
 
-def _check_news(ticker: str, since: date) -> dict | None:
-    """Count news articles after since_date. Trigger if > 0."""
-    conn = get_connection()
-    row = conn.execute(
-        "SELECT COUNT(*) FROM news WHERE ticker = ? AND date > ?",
-        [ticker, since],
-    ).fetchone()
-    conn.close()
-
-    count = row[0] if row else 0
-    if count > 0:
-        return {
-            "event_type": "news",
-            "details": f"{count} new article(s) since {since}",
-        }
-    return None
-
-
 def _check_technical_change(ticker: str) -> dict | None:
     """Compare trade_signal in latest vs previous technicals row."""
     conn = get_connection()
@@ -177,17 +159,10 @@ def detect_events(ticker: str, since_date: date | None = None) -> list[dict]:
     except Exception as e:
         log.debug("Events: technical_change check failed for %s: %s", ticker, e)
 
-    # News and earnings need a since_date
+    # Earnings needs a since_date (news event check removed: the daily
+    # pipeline refreshes watchlist news every morning, so it would trigger
+    # an analysis every single day)
     if since_date:
-        # News check disabled: the daily pipeline refreshes watchlist news
-        # every morning, so this would trigger an analysis every single day.
-        # try:
-        #     ev = _check_news(ticker, since_date)
-        #     if ev:
-        #         events.append(ev)
-        # except Exception as e:
-        #     log.debug("Events: news check failed for %s: %s", ticker, e)
-
         try:
             ev = _check_earnings(ticker, since_date)
             if ev:

@@ -22,6 +22,10 @@ LLAMA_CMD = [
     "--ctx-size", "96000",
 ]
 LLAMA_URL = "http://127.0.0.1:10000/v1/chat/completions"
+# Base URL for OpenAI-compatible clients (e.g. TradingAgents runner)
+LLAMA_BASE_URL = "http://127.0.0.1:10000/v1"
+# Model alias served by llama-server (see --alias in LLAMA_CMD)
+LLAMA_MODEL = "MyQwythos"
 LLAMA_STARTUP_WAIT_SECONDS = 1
 
 # ---------------------------------------------------------------------------
@@ -87,4 +91,6 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
+# Silence httpx's per-request INFO lines (getUpdates polls every few seconds)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("voice_logger_bot")

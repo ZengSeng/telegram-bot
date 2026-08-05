@@ -2,14 +2,14 @@
 
 import json
 import logging
+import re
 from datetime import date
 from pathlib import Path
 
-log = logging.getLogger(__name__)
+# Local llama.cpp endpoint + model alias (single source: stock_bot/config.py)
+from stock_bot.config import LLAMA_BASE_URL as LLAMA_BACKEND_URL, LLAMA_MODEL
 
-# Local llama.cpp config (matches stock_bot/config.py)
-LLAMA_BACKEND_URL = "http://127.0.0.1:10000/v1"
-LLAMA_MODEL = "MyQwythos"
+log = logging.getLogger(__name__)
 
 # Where reports are saved
 REPORTS_DIR = Path(__file__).parent.parent / "data" / "analysis_reports"
@@ -57,6 +57,32 @@ def _gfinance_bull_bear(ticker: str) -> tuple[str, str]:
     return fmt(row[0]), fmt(row[1])
 
 
+# Degenerate-answer detection thresholds (see _is_degenerate_argument)
+MIN_ARGUMENT_CHARS = 200   # anything shorter is unusable for the debate
+TOOL_CALL_SCAN_WINDOW = 600  # only the head of the text is scanned
+
+
+def _is_degenerate_argument(text: str) -> bool:
+    """Detect the local model imitating a tool call instead of answering.
+
+    Observed failures: one-liners like 'Tool call: Fundamental Analysis
+    Report' or bare JSON blobs ({"name": "get_insider_activity", ...}).
+    """
+    stripped = (text or "").strip()
+    if len(stripped) < MIN_ARGUMENT_CHARS:
+        return True
+    head = stripped[:TOOL_CALL_SCAN_WINDOW]
+    return bool(re.search(r"tool[ _-]?call|\"arguments\"\s*:", head, re.I))
+
+
+def _response_text(response) -> str:
+    """Coerce an LLM response's content to a plain string."""
+    return (
+        response.content if isinstance(response.content, str)
+        else str(response.content)
+    )
+
+
 def _create_grounded_researcher(side: str):
     """Bull/Bear researcher node grounded with Google Finance crowd points.
 
@@ -91,6 +117,11 @@ def _create_grounded_researcher(side: str):
                 if (bull_points or bear_points) else ""
             )
 
+            no_tools_directive = (
+                "\nIMPORTANT: Do not attempt any tool calls and do not output "
+                "JSON. No tools are available at this stage — write your full "
+                "argument directly as prose."
+            )
             prompt = f"""You are a {label} Analyst advocating {'for' if side == 'bull' else 'against'} investing in the stock. Build a strong, evidence-based case. Leverage the provided research and data, and engage directly with the other side's latest argument rather than just listing data.
 
 Resources available:
@@ -102,10 +133,29 @@ Company fundamentals report: {state['fundamentals_report']}
 {gfinance_section}
 Conversation history of the debate: {history}
 Last opposing argument: {current_response}
-""" + get_language_instruction()
+""" + get_language_instruction() + no_tools_directive
 
             response = llm.invoke(prompt)
-            argument = f"{label} Analyst: {response.content}"
+            content = _response_text(response)
+            # The local 9B sometimes emits a fake tool call instead of prose
+            # (e.g. 'Tool call: ...' or a JSON blob); retry once with an
+            # explicit nudge before accepting it.
+            if _is_degenerate_argument(content) or getattr(response, "tool_calls", None):
+                log.warning("%s analyst produced a degenerate answer for %s — "
+                            "retrying once", label, ticker)
+                retry = llm.invoke(
+                    prompt + no_tools_directive +  # repeated for emphasis
+                    "\nYour previous attempt was unusable. Try again and write "
+                    "several paragraphs of direct analysis."
+                )
+                retry_content = _response_text(retry)
+                if (not _is_degenerate_argument(retry_content)
+                        and not getattr(retry, "tool_calls", None)):
+                    content = retry_content
+                else:
+                    log.warning("%s analyst retry also degenerate for %s — "
+                                "using original answer", label, ticker)
+            argument = f"{label} Analyst: {content}"
 
             new_debate = {
                 "history": history + "\n" + argument,

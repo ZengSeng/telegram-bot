@@ -83,21 +83,6 @@ def _find_latest_report(ticker: str) -> Path | None:
     return matches[0] if matches else None
 
 
-def _report_is_from_today(report_dir: Path) -> bool:
-    """Check if a report folder name encodes today's date."""
-    # Folder name: RKLB_20260725_182427
-    parts = report_dir.name.split("_")
-    if len(parts) >= 2:
-        try:
-            from datetime import datetime
-
-            report_date = datetime.strptime(parts[-2], "%Y%m%d").date()
-            return report_date == date.today()
-        except ValueError:
-            pass
-    return False
-
-
 # ---------------------------------------------------------------------------
 # State log cleanup
 # ---------------------------------------------------------------------------
@@ -118,17 +103,6 @@ def _cleanup_state_logs(ticker: str) -> None:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
-
-
-def has_decision_today(ticker: str) -> bool:
-    """Check if a decision already exists in DuckDB for today."""
-    conn = get_connection()
-    row = conn.execute(
-        "SELECT 1 FROM trading_agent_decisions WHERE ticker = ? AND date = ?",
-        [ticker, date.today()],
-    ).fetchone()
-    conn.close()
-    return row is not None
 
 
 def ingest_analysis_decision(ticker: str) -> bool:

@@ -35,10 +35,11 @@ ANALYSIS_STALE_DAYS = 7
 # Night pipeline bulk limits (tickers per run). Sized so
 # limit x 3 runs/day x stale_days covers the ~2700-ticker universe:
 #   fundamentals: 130 x 3 x 7 = 2730  -> 7-day refresh
-#   analyst:      500 x 3 x 3 = 4500  -> 3-day refresh (with headroom)
+#   analyst:      200 x 3 x 3 = 1800  -> 3-day refresh for the priority head
+#                                        (watchlist/top-rated); long tail slower
 #   enriched:     130 x 3 x 7 = 2730  -> 7-day refresh
 NIGHT_FUNDAMENTALS_LIMIT = 130
-NIGHT_ANALYST_LIMIT = 500
+NIGHT_ANALYST_LIMIT = 200
 NIGHT_ENRICHED_LIMIT = 130
 
 # TradingAgents analyses per night run (~7 min each). With 3 runs/day that's
@@ -73,21 +74,6 @@ def should_ingest_news(ticker: str) -> bool:
     return _is_stale("news", "date", ticker, NEWS_STALE_DAYS)
 
 
-def should_ingest_enriched(ticker: str) -> bool:
-    """Growth estimates + targets change slowly — 3-day threshold."""
-    return _is_stale("ticker_enriched", "date_fetched", ticker, ENRICHED_STALE_DAYS)
-
-
-def should_ingest_analyst(ticker: str) -> bool:
-    """Analyst targets overlap with enrichment cycle — 3-day threshold."""
-    return _is_stale("analyst_targets", "date_fetched", ticker, ANALYST_STALE_DAYS)
-
-
-def should_ingest_fundamentals(ticker: str) -> bool:
-    """Company info snapshot — 7-day threshold."""
-    return _is_stale("fundamentals", "date_fetched", ticker, FUNDAMENTALS_STALE_DAYS)
-
-
 def should_ingest_financials(ticker: str) -> bool:
     """Check if financials need refreshing based on projected next report date.
 
@@ -102,12 +88,13 @@ def run_daily_pipeline(tickers: list[str], use_smart_scheduling: bool = False) -
     """Run the full daily data refresh for all watchlist tickers.
 
     1. Batch-download prices (incremental) for full universe + NZDUSD forex
-    2. Per-ticker: news, analyst targets, enriched (smart-scheduled)
+    2. Per-ticker: news (smart-scheduled)
     3. Global news, Google Finance, AI summaries
     4. Screener → candidates → portfolio engine → review
 
-    Fundamentals and financials are handled by the night pipeline (enrich).
-    TradingAgents analysis moved to the night pipeline (event-gated, capped).
+    Fundamentals, financials, analyst targets and enrichment are handled by
+    the night pipeline (rolling batches). TradingAgents analysis is also
+    night-only (event-gated + stale refresh, capped).
 
     When use_smart_scheduling=True, each per-ticker ingestion is gated by a
     staleness check to avoid unnecessary API calls.
@@ -211,10 +198,10 @@ def run_daily_pipeline(tickers: list[str], use_smart_scheduling: bool = False) -
 
         log.info("Pipeline: running portfolio review...")
         review = run_portfolio_review()
-        if review and not review.startswith("("):
+        if review:
             log.info("Pipeline: portfolio review complete (%d chars)", len(review))
         else:
-            log.info("Pipeline: portfolio review skipped (%s)", review or "no decisions")
+            log.info("Pipeline: portfolio review skipped (no decisions or LLM unavailable)")
     except Exception as e:
         log.warning("Pipeline: portfolio review failed (non-fatal): %s", e)
 

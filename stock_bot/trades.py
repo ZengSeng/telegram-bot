@@ -1,9 +1,18 @@
 """Trade storage (CSV), duplicate detection, and watchlist persistence."""
 
 import csv
-import json
 
-from .config import TRADES_CSV, TRADES_CSV_COLUMNS, WATCHLIST_FILE
+from data_eng.watchlist import load_watchlist as _read_watchlist, save_watchlist
+
+from .config import TRADES_CSV, TRADES_CSV_COLUMNS
+
+__all__ = [
+    "read_trades",
+    "append_trade",
+    "is_duplicate",
+    "load_watchlist",
+    "save_watchlist",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -57,17 +66,14 @@ def is_duplicate(trade: dict) -> bool:
 # ---------------------------------------------------------------------------
 
 def load_watchlist() -> list[str]:
-    """Load the watchlist from disk, defaulting to ['RKLB']."""
-    if WATCHLIST_FILE.exists():
-        try:
-            data = json.loads(WATCHLIST_FILE.read_text())
-            if isinstance(data, list):
-                return [t.upper() for t in data]
-        except (json.JSONDecodeError, TypeError):
-            pass
-    return ["RKLB"]
+    """Load the watchlist, defaulting to ['RKLB'] if the file is absent/corrupt.
+
+    Parsing/uppercasing lives in the canonical data_eng.watchlist loader; this
+    wrapper only adds the bot-friendly fallback so there is a single code path.
+    """
+    watchlist = _read_watchlist()
+    return ["RKLB"] if watchlist is None else watchlist
 
 
-def save_watchlist(tickers: list[str]) -> None:
-    """Persist the watchlist to disk."""
-    WATCHLIST_FILE.write_text(json.dumps([t.upper() for t in tickers]))
+# save_watchlist is re-exported from data_eng.watchlist above.
+

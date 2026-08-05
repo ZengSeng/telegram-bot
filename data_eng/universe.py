@@ -121,16 +121,8 @@ class UniverseScraper:
         log.info("Universe: full scrape complete — %d total tickers", len(all_tickers))
         return all_tickers
 
-    def get_universe_tickers(
-        self, group_id: int | None = None, min_rating: str | None = None
-    ) -> list[str]:
-        """Query universe table with optional filters.
-
-        Args:
-            group_id: Filter by stagger group (1-4).
-            min_rating: Minimum rating threshold. One of
-                        "Strong Buy", "Buy", "Hold", "Sell", "Underperform".
-        """
+    def get_universe_tickers(self, group_id: int | None = None) -> list[str]:
+        """Query universe table with an optional stagger-group filter."""
         conn = get_connection()
 
         query = "SELECT ticker FROM stock_universe WHERE 1=1"
@@ -140,24 +132,6 @@ class UniverseScraper:
             query += " AND group_id = ?"
             params.append(group_id)
 
-        if min_rating is not None:
-            rating_order = ["Underperform", "Sell", "Hold", "Buy", "Strong Buy"]
-            if min_rating in rating_order:
-                idx = rating_order.index(min_rating)
-                allowed = rating_order[idx:]
-                placeholders = ", ".join("?" for _ in allowed)
-                query += f" AND rating IN ({placeholders})"
-                params.extend(allowed)
-
         rows = conn.execute(query, params).fetchall()
-        conn.close()
-        return [r[0] for r in rows]
-
-    def get_shortlisted_tickers(self) -> list[str]:
-        """Return Strong Buy + Buy rated tickers (for enrichment/analysis)."""
-        conn = get_connection()
-        rows = conn.execute(
-            "SELECT ticker FROM stock_universe WHERE rating IN ('Strong Buy', 'Buy')"
-        ).fetchall()
         conn.close()
         return [r[0] for r in rows]

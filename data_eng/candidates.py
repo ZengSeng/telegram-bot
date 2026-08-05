@@ -3,10 +3,10 @@
 import logging
 from datetime import date
 
-import numpy as np
 import pandas as pd
 
 from .db import get_connection
+from .utils import safe_float as _safe_float
 
 log = logging.getLogger(__name__)
 
@@ -265,16 +265,6 @@ def _store_candidates(kept: pd.DataFrame, removed: pd.DataFrame) -> None:
     )
     conn.close()
     log.info("Candidates: stored %d rows for %s", len(rows), today)
-
-
-def _safe_float(val) -> float | None:
-    """Convert to float, returning None for NaN/inf."""
-    if val is None:
-        return None
-    f = float(val)
-    if np.isnan(f) or np.isinf(f):
-        return None
-    return round(f, 2)
 
 
 def get_analysis_tickers(watchlist: list[str]) -> list[str]:
