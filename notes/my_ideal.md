@@ -6,6 +6,8 @@
 |------|-----|
 | 8:00 AM | Daily pipeline (`run_daily_pipeline`, data refresh + portfolio chain) |
 | 9:30 AM | Portfolio summary sent to Telegram |
+| 12:00 PM | Night pipeline (bulk enrichment + TradingAgents batch) |
+| 2:00 PM | Night pipeline (bulk enrichment + TradingAgents batch) |
 | 4:00 PM | Night pipeline (bulk enrichment + TradingAgents batch) |
 | 6:00 PM | Night pipeline (bulk enrichment + TradingAgents batch) |
 | 8:00 PM | Night pipeline (bulk enrichment + TradingAgents batch) |
@@ -38,7 +40,7 @@ Config: `stock_bot/config.py` → `PIPELINE_HOUR`, `SUMMARY_HOUR/MINUTE`, `NIGHT
 
 | Step | Table | CLI to test | Notes |
 |------|-------|-------------|-------|
-| Screener | `screener_scores` | `--screen` | Percentile-rank scores: quality, value, momentum, sentiment, risk + overall. Scores all tickers with `fundamentals` data |
+| Screener | `screener_scores` | `--screen` | Percentile-rank scores: quality, value, momentum, sentiment, risk + overall. Scores the **full universe** (all tickers with `fundamentals` data) so scores keep pace with night enrichment |
 | Candidates | `candidates` | `--candidates` | Sector-balanced top-N from screener, correlation-filtered (0.85 threshold) |
 | Events | `events` | `--events` | Detected events are stored when they trigger analysis |
 | Portfolio engine | `portfolio_decisions` | `--portfolio` | Deterministic rules on `trading_agent_decisions` + `screener_scores` + holdings (trades.csv). Max 20%/stock, 35%/sector, min screener score 80, 10% cash reserve, stop loss mandatory |
@@ -50,63 +52,84 @@ single-ticker analysis is still available via `/analyze <TICKER>` in the bot.
 
 **Dependency chain:** `fundamentals`/`technicals` → screener → candidates → portfolio engine → review. TradingAgents runs in the evening on the same queue (candidates + watchlist).
 
-### Observed run time (measured 2026-08-04, ~2,755 universe / 4 watchlist)
+### Observed run time (measured 2026-08-06, ~2,772 universe / 4 watchlist)
 
-| Step | Time | Notes |
-|------|------|-------|
-| Prices (bulk incremental + backfill) | ~1-2 min | Chunked 700/request with pauses + one retry pass; ~40 stale/new tickers backfilled individually |
-| Technicals | ~3 min | 2,703 tickers, local computation |
-| News (ticker + global) | ~15s | |
-| Overviews (Google Finance + Yahoo) | ~43s | Playwright scrapes |
-| AI news summaries | ~1 min | Needs llama-server |
-| Screener + candidates | ~1s | |
+| Step | ~Time/ticker | ~Total/step (measured) | Notes |
+|------|--------------|------------------------|-------|
+| Prices (bulk incremental + backfill) | ~0.05s | ~2 min | 2,755 tickers in 4 chunks, ~11,000 rows; ~14 stale/new tickers backfilled individually; delisted stragglers (FONR) warn and move on |
+| Technicals | ~0.07s | ~3 min (0 when already done today) | Local computation; skips tickers already processed today |
+| News (ticker + global) | ~14s | ~32s | Watchlist tickers only; fresh ones are skipped |
+| Overviews (Google Finance + Yahoo) | ~8s each | ~15s | Playwright scrapes for the watchlist |
+| AI news summaries | ~13s | ~53s | 4 tickers; needs llama-server |
+| Screener + candidates + portfolio engine | n/a | ~1s | Screener scores the full fundamentals-covered universe (~445-750 tickers growing with night enrichment) |
+| Portfolio review | n/a | ~22s | One LLM call over today's decisions |
 
-**Total: ~6-7 min** (TradingAgents no longer part of the morning run).
+**Total: ~4.5 min** on day one of the 5-run era (TradingAgents no longer
+part of the morning run).
+
+Day-one issue found and fixed: the screener crashed on
+`float() ... not 'NAType'` — `safe_float` didn't treat `pd.NA` as missing
+and `_fetch_price_metrics` let NULL closes carry `pd.NA` into the volatility
+math. Both hardened on 2026-08-06; the morning candidates had fallen back to
+the previous day's scores.
 
 ---
 
-## Night Pipeline (6 PM / 8 PM / 10 PM, 3x per evening)
+## Night Pipeline (12 PM / 2 PM / 4 PM / 6 PM / 8 PM, 5x per day)
 
-| Order | Table | Limit/run | Skip if fresher than | ~Time/ticker | Notes |
-|-------|-------|-----------|----------------------|--------------|-------|
-| 1 | `stock_universe` | full re-scrape | — | ~2 min total | All 4 sector groups; updates ratings, discovers new tickers |
-| 2 | `financials` | watchlist only | 80-day cycle | ~2s | Quarterly statements; refresh when last report_date + 80d passed |
-| 3 | `fundamentals` | 130 | 7 days | ~2s | Company snapshot (P/E, margins, etc.) |
-| 4 | `analyst_targets` | 500 | 3 days | ~3.5s | Consensus + individual analyst ratings/upgrades |
-| 5 | `ticker_enriched` | 130 | 7 days | ~7s | Growth estimates, price targets, recommendations, stock trends |
-| 6 | `trading_agent_decisions` | 6 | stale 7d / event-gated | ~7 min | TradingAgents batch; needs llama-server |
+More runs × smaller batches = same refresh cadence as before, but more
+TradingAgents analyses per day (up to 30 vs 18).
+
+| Order | Table | Limit/run | Skip if fresher than | ~Time/ticker | ~Total/step (measured) | Notes |
+|-------|-------|-----------|----------------------|--------------|------------------------|-------|
+| 1 | `stock_universe` | full re-scrape, **once per day** | already scraped today | ~2 min total | ~2 min (run 1 only) | All 4 sector groups; updates ratings, discovers new tickers. Runs 2-5 reuse the first run's scrape (`_universe_scraped_today()`) |
+| 2 | `financials` | 80 | 80-day filing cycle (newest `report_date`) | ~7s | ~9 min | Quarterly statements, rolling over the **full universe** (was watchlist-only). A ticker is due when its latest filing is ~80 days old |
+| 3 | `fundamentals` | 80 | 7 days | ~2s | ~3 min | Company snapshot (P/E, margins, etc.) |
+| 4 | `analyst_targets` | 120 | 3 days | ~3.5s | ~7 min | Consensus + individual analyst ratings/upgrades |
+| 5 | `ticker_enriched` | 80 | 7 days | ~7s | ~9 min | Growth estimates, price targets, recommendations, stock trends |
+| 6 | `gfinance_overview` + `yfinance_overview` | 12 each | 14 days | Playwright scrape | ~4 min | AI overviews for the wider universe; the 8 AM pipeline keeps the watchlist fresh daily, so this batch works down the priority list |
+| 7 | `trading_agent_decisions` | 6 | stale 7d / event-gated | ~6 min | ~34-40 min | TradingAgents batch; needs llama-server |
 
 Limits and staleness thresholds are constants in `data_eng/pipeline.py`:
-- Limits: `NIGHT_FUNDAMENTALS_LIMIT`, `NIGHT_ANALYST_LIMIT`, `NIGHT_ENRICHED_LIMIT`, `NIGHT_ANALYSIS_LIMIT` (6)
-- Skip-if-fresh: `FUNDAMENTALS_STALE_DAYS` (7), `ANALYST_STALE_DAYS` (3), `ENRICHED_STALE_DAYS` (7), `ANALYSIS_STALE_DAYS` (7)
+- Limits: `NIGHT_FUNDAMENTALS_LIMIT` (80), `NIGHT_FINANCIALS_LIMIT` (80), `NIGHT_ANALYST_LIMIT` (120), `NIGHT_ENRICHED_LIMIT` (80), `NIGHT_OVERVIEW_LIMIT` (12), `NIGHT_ANALYSIS_LIMIT` (6)
+- Skip-if-fresh: `FUNDAMENTALS_STALE_DAYS` (7), `ANALYST_STALE_DAYS` (3), `ENRICHED_STALE_DAYS` (7), `OVERVIEW_STALE_DAYS` (14), `ANALYSIS_STALE_DAYS` (7), and `FINANCIALS_REFRESH_DAYS` (80, judged on newest `report_date`)
 - No-data retry: `SKIP_RETRY_DAYS` (30) and `SKIP_ATTEMPT_THRESHOLD` (2), both in `db.py`
 
-### TradingAgents batch (step 6)
+### TradingAgents batch (step 7)
 
 Same stale-refresh pattern as the bulk steps, plus an event layer on top:
 
 1. **Event layer** — candidates + watchlist pass the existing event gate
    (±5% price move, technical signal flip, new earnings filing, or never
    analyzed). Triggered tickers go first even if their last analysis is fresh.
-   The news trigger is **disabled** (daily pipeline refreshes watchlist news
-   every morning, so it would fire every day) — commented out in events.py.
+   The news trigger was **removed** (daily pipeline refreshes watchlist news
+   every morning, so it would fire every day).
 2. **Stale layer** — universe tickers whose last decision is older than
    `ANALYSIS_STALE_DAYS` (or never analyzed), via the same priority query
    (watchlist → rating → sector → staleness).
 
 At most `NIGHT_ANALYSIS_LIMIT` (6) analyses per run; leftovers roll to the
-next run. 3 runs/day → up to 18/day capacity. Measured ~6-8.5 min per
-analysis on the local 9B model. Never analyzes a ticker twice per day.
+next run — there's no stored queue: selection is stateless, so un-analyzed
+tickers stay stale and get picked again (oldest-first within their priority
+class). 5 runs/day → up to 30/day capacity. Never analyzes a ticker twice
+per day (`_has_decision_today`).
+
+The stale layer uses the **same priority ordering as the bulk steps**
+(watchlist → rating → sector → staleness) via `_build_priority_query` on
+`trading_agent_decisions`; event-triggered tickers jump ahead of it.
 
 ### TradingAgents runtime optimizations (analysis/runner.py)
 
 Everything served from local DuckDB — no live network during an analysis:
 
-- **Bull/Bear debate grounded with Google Finance**: the bull/bear researcher
-  nodes are patched to inject the stored `gfinance_overview` bull/bear points
-  as evidence. The night pipeline pre-fetches the overview for each queued
-  ticker before analysis (`ensure_gfinance_overview`, fresh = <= 1 day);
-  `/analyze` scrapes on demand as a fallback.
+- **Bull/Bear debate grounded with Google Finance — no LLM calls**: the
+  bull/bear researcher nodes are replaced with LLM-free nodes that write the
+  stored `gfinance_overview` bull/bear points straight into the debate
+  history (saves ~2 long generations per analysis). The Research Manager
+  still evaluates the bull/bear text alongside the analyst reports. The
+  night pipeline pre-fetches the overview for each queued ticker before
+  analysis (`ensure_gfinance_overview`, fresh = <= 1 day); `/analyze`
+  scrapes on demand as a fallback.
 - **Verified market snapshot from local prices**: the validator's OHLCV
   loader is patched to read `daily_prices` instead of a live 5-year yfinance
   download (removes network + rate-limit risk mid-analysis).
@@ -122,7 +145,8 @@ stale watchlist ticker still jumps to the front of the queue and refreshes first
 ### No-data skip tracking (`skip_tickers` table)
 
 One shared table tracks tickers that keep returning **no data**, per source:
-`fundamentals`, `analyst_targets`, `ticker_enriched`, and `prices`. They stop
+`fundamentals`, `financials`, `analyst_targets`, `ticker_enriched`,
+`gfinance_overview`, `yfinance_overview`, and `prices`. They stop
 burning API calls every run:
 
 1. A fetch that succeeds but returns nothing records a miss in `skip_tickers`
@@ -139,7 +163,7 @@ wasted requests disappear. Helpers: `record_miss` / `clear_miss` /
 
 To reset manually: `DELETE FROM skip_tickers;` (optionally `WHERE source = '...'`).
 
-### Bulk ordering (all 3 bulk steps)
+### Bulk ordering (all bulk steps)
 
 All universe tickers are eligible (any rating), processed in priority order:
 
@@ -148,24 +172,45 @@ All universe tickers are eligible (any rating), processed in priority order:
 3. **Sector**: technology → industrials → consumer-defensive → healthcare → financial-services → consumer-cyclical → energy → communication-services → utilities → basic-materials → real-estate → unknown
 4. **Staleness**: never-loaded first, then oldest-loaded first
 
-### Refresh cadence (2,700 tickers, 3 runs/day)
+### Refresh cadence (2,700 tickers, 5 runs/day)
 
 With the skip-if-fresh filter, a ticker is re-ingested roughly when it crosses
-its staleness threshold. Capacity (limit × 3 runs) is sized to cover it:
+its staleness threshold. Capacity (limit × 5 runs) is sized to cover it:
 
 | Table | Capacity | Stale after | Effective refresh |
 |-------|----------|-------------|-------------------|
-| `fundamentals` | 390/day | 7 days | ~7 days (needs ~386/day) |
-| `analyst_targets` | 1,500/day cap | 3 days | ~3 days (needs ~900/day; headroom) |
-| `ticker_enriched` | 390/day | 7 days | ~7 days (needs ~386/day) |
+| `fundamentals` | 400/day | 7 days | ~7 days (needs ~386/day) |
+| `financials` | 400/day | 80-day filing cycle | Mostly skip-gated; only tickers due for a new quarter are fetched |
+| `analyst_targets` | 600/day cap | 3 days | ~3 days for the priority head; long tail cycles slower |
+| `ticker_enriched` | 400/day | 7 days | ~7 days (needs ~386/day) |
+| AI overviews | 60/day each | 14 days | Priority head (top ~840) on a 14-day window; watchlist already fresh from the morning run |
 
 ### Estimated run time
 
-- Ingestion (steps 1-5), **worst case** (full limits, clearing a backlog): ~50 min.
-- Typical steady state: ~35-40 min (analyst step processes only ~300 stale).
-- TradingAgents adds up to 6 × ~7 min = ~42 min when the budget is full.
+- Ingestion (steps 1-6), **worst case** (full limits, clearing a backlog): ~35 min.
+- Typical steady state: ~20-30 min (most steps only process stale tickers; overviews add Playwright scrape time).
+- TradingAgents adds up to 6 × ~6 min = ~36 min when the budget is full (bull/bear LLM calls removed).
 - Total stays well under the 2-hour spacing; if runs ever overlap, lower
   `NIGHT_ANALYSIS_LIMIT` first — unfinished tickers just roll over.
+
+### Observed run time (measured 2026-08-06, first day on the 5-run schedule)
+
+Three full runs (12/2/4 PM slots), all at full limits while clearing backlog:
+
+| Step | Measured | Notes |
+|------|----------|-------|
+| Financials | ~556s / 80 tickers | Slowest bulk step (~7s/ticker) |
+| Fundamentals | ~160s / 76-79 | A few no-data tickers (RPT, AMBQ) — skip-tracked |
+| Analyst targets | ~409s / 119 of 120 | 404s on data-less microcaps (PRPO, ERIE, SHOE) are expected |
+| Ticker enriched | ~548s / 80 | |
+| AI overviews | ~230-265s | gfinance 12/12 every run; **yfinance yield is low** (2-8/12, many empty overviews) |
+| TradingAgents | 2055-2374s / 5-6 analyses | ~6 min/analysis with the LLM-free bull/bear nodes |
+| **Total** | **3950-4310s (~66-72 min)** | Comfortably inside the 2-hour spacing |
+
+One analysis failure on day 1 (ALMU): the LLM called the `get_global_news`
+tool without the optional `look_back_days`/`limit` args and the DuckDB vendor
+crashed on `None`. Fixed on 2026-08-06 — the vendor now resolves omitted args
+from `DEFAULT_CONFIG`, same as the yfinance vendor.
 
 ---
 
@@ -180,7 +225,7 @@ python -m data_eng --daily
 python -m data_eng --daily-smart   # same, but skips fresh per-ticker data
 
 # Night pipeline
-python -m data_eng --night              # full limits (130/500/130) + up to 6 analyses (needs llama-server)
+python -m data_eng --night              # scheduled limits (80/80/120/80/12) + up to 6 analyses (needs llama-server)
 python -m data_eng --night --limit 10 --analysis-limit 1   # smoke test: 10 tickers/step, 1 analysis
 python -m data_eng --night --limit 10 --analysis-limit 0   # ingestion only
 
@@ -201,6 +246,8 @@ python -m data_eng --enrich --sector technology --limit 20
 
 - LLM steps (news summaries, TradingAgents, portfolio review) need llama-server on `http://127.0.0.1:10000`. The bot starts it automatically; manual CLI runs need it started separately.
 - All pipeline steps after ingestion are non-fatal: a failure logs a warning and the pipeline continues.
+- **Why rolling `financials` matters for TradingAgents**: the analysis fundamentals tools (`analysis/duckdb_vendor.py`) read balance sheet / cashflow / income statement from this table. Before the rolling batch, off-watchlist tickers returned `NO_DATA_AVAILABLE` during analysis; now they get 4 quarters of real statements. It also unlocks the earnings event trigger (new filing → re-analysis) for the whole universe, not just the watchlist.
+- `/summary TICKER` in Telegram shows a ticker's **latest** decision regardless of date (the night pipeline only re-analyzes on events/staleness, so "today" is often empty); bare `/summary` lists today's decisions.
 - `daily_prices` uses a fast bulk incremental download, chunked 700 tickers per yfinance request with pauses between chunks, plus one retry pass after 20s for rate-limited tickers (constants `PRICE_CHUNK_SIZE` / `PRICE_CHUNK_PAUSE` / `PRICE_RETRY_PAUSE` in ingest.py). Only tickers with no data or stale > 30 days are backfilled one-at-a-time; repeat no-data tickers are skipped via `skip_tickers` (source `prices`).
 - The manual `--enrich` CLI does NOT skip fresh tickers (processes up to `--limit` regardless of age) so it behaves predictably for one-off runs; the scheduled night pipeline is the one that skips fresh.
 - `rating` in stock_universe has string `'nan'` values (~270 rows) treated as lowest priority; consider normalizing to NULL someday.

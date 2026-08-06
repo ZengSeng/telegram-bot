@@ -2,7 +2,6 @@
 
 import json
 import logging
-import re
 from datetime import date
 from pathlib import Path
 
@@ -18,7 +17,6 @@ REPORTS_DIR = Path(__file__).parent.parent / "data" / "analysis_reports"
 # ---------------------------------------------------------------------------
 # Local-data patches: ground the debate in stored data, avoid live network
 # ---------------------------------------------------------------------------
-
 
 def _gfinance_bull_bear(ticker: str) -> tuple[str, str]:
     """Latest gfinance bull/bear points as text; scrape on demand if missing."""
@@ -57,52 +55,23 @@ def _gfinance_bull_bear(ticker: str) -> tuple[str, str]:
     return fmt(row[0]), fmt(row[1])
 
 
-# Degenerate-answer detection thresholds (see _is_degenerate_argument)
-MIN_ARGUMENT_CHARS = 200   # anything shorter is unusable for the debate
-TOOL_CALL_SCAN_WINDOW = 600  # only the head of the text is scanned
+def _create_gfinance_evidence_node(side: str):
+    """LLM-free Bull/Bear node: writes the stored Google Finance crowd points
+    straight into the debate history.
 
-
-def _is_degenerate_argument(text: str) -> bool:
-    """Detect the local model imitating a tool call instead of answering.
-
-    Observed failures: one-liners like 'Tool call: Fundamental Analysis
-    Report' or bare JSON blobs ({"name": "get_insider_activity", ...}).
-    """
-    stripped = (text or "").strip()
-    if len(stripped) < MIN_ARGUMENT_CHARS:
-        return True
-    head = stripped[:TOOL_CALL_SCAN_WINDOW]
-    return bool(re.search(r"tool[ _-]?call|\"arguments\"\s*:", head, re.I))
-
-
-def _response_text(response) -> str:
-    """Coerce an LLM response's content to a plain string."""
-    return (
-        response.content if isinstance(response.content, str)
-        else str(response.content)
-    )
-
-
-def _create_grounded_researcher(side: str):
-    """Bull/Bear researcher node grounded with Google Finance crowd points.
-
-    Mirrors the upstream node (same state plumbing) but injects the stored
-    gfinance bull/bear case as extra evidence, so the local 9B model debates
-    from real current theses instead of only the analyst reports.
+    Replaces the upstream LLM researcher — no model call, just a DB read —
+    saving two long generations per analysis. The debate stage keeps its
+    shape (routing needs the 'Bull/Bear Analyst:' prefix and the count bump),
+    and the Research Manager still evaluates this bull/bear text alongside
+    the analyst reports.
     """
     label = "Bull" if side == "bull" else "Bear"
 
     def factory(llm):
         def node(state) -> dict:
-            from tradingagents.agents.utils.agent_utils import (
-                get_instrument_context_from_state,
-                get_language_instruction,
-            )
-
             debate = state["investment_debate_state"]
             history = debate.get("history", "")
             side_history = debate.get(f"{side}_history", "")
-            current_response = debate.get("current_response", "")
             # AgentState stores the ticker as company_of_interest (there is
             # no "ticker" key); fall back to the first human message.
             ticker = state.get("company_of_interest") or (
@@ -111,51 +80,18 @@ def _create_grounded_researcher(side: str):
             bull_points, bear_points = (
                 _gfinance_bull_bear(ticker) if ticker else ("", "")
             )
-            gfinance_section = (
-                f"Google Finance crowd-sourced bull case:\n{bull_points}\n"
-                f"Google Finance crowd-sourced bear case:\n{bear_points}"
-                if (bull_points or bear_points) else ""
-            )
-
-            no_tools_directive = (
-                "\nIMPORTANT: Do not attempt any tool calls and do not output "
-                "JSON. No tools are available at this stage — write your full "
-                "argument directly as prose."
-            )
-            prompt = f"""You are a {label} Analyst advocating {'for' if side == 'bull' else 'against'} investing in the stock. Build a strong, evidence-based case. Leverage the provided research and data, and engage directly with the other side's latest argument rather than just listing data.
-
-Resources available:
-{get_instrument_context_from_state(state)}
-Market research report: {state['market_report']}
-Social media sentiment report: {state['sentiment_report']}
-Latest world affairs news: {state['news_report']}
-Company fundamentals report: {state['fundamentals_report']}
-{gfinance_section}
-Conversation history of the debate: {history}
-Last opposing argument: {current_response}
-""" + get_language_instruction() + no_tools_directive
-
-            response = llm.invoke(prompt)
-            content = _response_text(response)
-            # The local 9B sometimes emits a fake tool call instead of prose
-            # (e.g. 'Tool call: ...' or a JSON blob); retry once with an
-            # explicit nudge before accepting it.
-            if _is_degenerate_argument(content) or getattr(response, "tool_calls", None):
-                log.warning("%s analyst produced a degenerate answer for %s — "
-                            "retrying once", label, ticker)
-                retry = llm.invoke(
-                    prompt + no_tools_directive +  # repeated for emphasis
-                    "\nYour previous attempt was unusable. Try again and write "
-                    "several paragraphs of direct analysis."
+            points = bull_points if side == "bull" else bear_points
+            if points:
+                body = (
+                    f"Crowd-sourced {label.lower()} case from Google Finance:\n"
+                    f"{points}"
                 )
-                retry_content = _response_text(retry)
-                if (not _is_degenerate_argument(retry_content)
-                        and not getattr(retry, "tool_calls", None)):
-                    content = retry_content
-                else:
-                    log.warning("%s analyst retry also degenerate for %s — "
-                                "using original answer", label, ticker)
-            argument = f"{label} Analyst: {content}"
+            else:
+                body = (
+                    f"No crowd-sourced {label.lower()} case available from "
+                    "Google Finance; weigh the analyst reports accordingly."
+                )
+            argument = f"{label} Analyst: {body}"
 
             new_debate = {
                 "history": history + "\n" + argument,
@@ -240,11 +176,12 @@ def _patch_dataflows():
         "duckdb": lambda *a, **kw: "(Prediction markets not available — using local DB only)"
     }
 
-    # Ground bull/bear debate with stored Google Finance bull/bear points
+    # Bull/bear debate without LLM calls: inject stored Google Finance
+    # bull/bear points directly (saves ~2 generations per analysis)
     import tradingagents.graph.setup as setup_mod
 
-    setup_mod.create_bull_researcher = _create_grounded_researcher("bull")
-    setup_mod.create_bear_researcher = _create_grounded_researcher("bear")
+    setup_mod.create_bull_researcher = _create_gfinance_evidence_node("bull")
+    setup_mod.create_bear_researcher = _create_gfinance_evidence_node("bear")
 
     # Verified-market-snapshot OHLCV from local DB, not live yfinance
     import tradingagents.dataflows.market_data_validator as validator_mod

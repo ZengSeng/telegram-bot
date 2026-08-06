@@ -28,7 +28,7 @@ log = logging.getLogger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-TOTAL_CAPITAL = 10_000.0  # USD — adjust to your portfolio size
+TOTAL_CAPITAL = 28000.0  # USD — adjust to your portfolio size
 MAX_POSITION_PCT = 0.20   # max 20% in one stock
 MAX_SECTOR_PCT = 0.35     # max 35% in one sector
 MIN_SCREENER_SCORE = 80.0 # must be top 20% to buy

@@ -152,7 +152,9 @@ def _fetch_price_metrics(tickers: list[str]) -> pd.DataFrame:
     records = []
     for ticker, grp in df.groupby("ticker"):
         grp = grp.sort_values("date")
-        closes = grp["close"].values
+        # dropna: close is nullable — a NULL inside the window would carry
+        # pd.NA through the math and crash float() (screener crash 2026-08-06)
+        closes = grp["close"].dropna().to_numpy(dtype=float)
 
         n = len(closes)
         if n < 2:

@@ -9,13 +9,19 @@ from .ingest import (
     API_PAUSE,
     batch_ingest_prices,
     batch_ingest_technicals,
-    ingest_financials,
     ingest_global_news,
     ingest_news,
     ingest_yfinance_overview,
 )
 from .analysis_ingest import ingest_analysis_decision
-from .enrich import bulk_analyst_targets, bulk_enriched, run_enrich
+from .enrich import (
+    bulk_analyst_targets,
+    bulk_enriched,
+    bulk_financials,
+    bulk_gfinance_overviews,
+    bulk_yfinance_overviews,
+    run_enrich,
+)
 from .gfinance import ingest_gfinance_overview
 from .summarize import generate_news_summaries
 
@@ -30,20 +36,25 @@ NEWS_STALE_DAYS = 1
 ENRICHED_STALE_DAYS = 7
 ANALYST_STALE_DAYS = 3
 FUNDAMENTALS_STALE_DAYS = 7
+OVERVIEW_STALE_DAYS = 14
 ANALYSIS_STALE_DAYS = 7
 
-# Night pipeline bulk limits (tickers per run). Sized so
-# limit x 3 runs/day x stale_days covers the ~2700-ticker universe:
-#   fundamentals: 130 x 3 x 7 = 2730  -> 7-day refresh
-#   analyst:      200 x 3 x 3 = 1800  -> 3-day refresh for the priority head
-#                                        (watchlist/top-rated); long tail slower
-#   enriched:     130 x 3 x 7 = 2730  -> 7-day refresh
-NIGHT_FUNDAMENTALS_LIMIT = 130
-NIGHT_ANALYST_LIMIT = 200
-NIGHT_ENRICHED_LIMIT = 130
+# Night pipeline bulk limits (tickers per run). Sized for 5 runs/day so
+# limit x 5 runs/day x stale_days covers the ~2700-ticker universe:
+#   fundamentals: 80 x 5 x 7 = 2800  -> 7-day refresh
+#   financials:   80 x 5, gated on the 80-day filing cycle (mostly skips)
+#   analyst:      120 x 5 x 3 = 1800 -> 3-day refresh for the priority head
+#                                       (watchlist/top-rated); long tail slower
+#   enriched:     80 x 5 x 7 = 2800  -> 7-day refresh
+#   overviews:    12 x 5 x 14 = 840  -> 14-day refresh for the priority head
+NIGHT_FUNDAMENTALS_LIMIT = 80
+NIGHT_FINANCIALS_LIMIT = 80
+NIGHT_ANALYST_LIMIT = 120
+NIGHT_ENRICHED_LIMIT = 80
+NIGHT_OVERVIEW_LIMIT = 12
 
-# TradingAgents analyses per night run (~7 min each). With 3 runs/day that's
-# up to 18/day; un-analyzed tickers roll over to the next run.
+# TradingAgents analyses per night run (~7 min each). With 5 runs/day that's
+# up to 30/day; un-analyzed tickers roll over to the next run.
 NIGHT_ANALYSIS_LIMIT = 6
 
 # No-data skip tracking lives in db.py: SKIP_ATTEMPT_THRESHOLD (misses before
@@ -72,16 +83,6 @@ def _is_stale(table: str, date_col: str, ticker: str, max_age_days: int) -> bool
 def should_ingest_news(ticker: str) -> bool:
     """News changes daily — refresh if older than 1 day."""
     return _is_stale("news", "date", ticker, NEWS_STALE_DAYS)
-
-
-def should_ingest_financials(ticker: str) -> bool:
-    """Check if financials need refreshing based on projected next report date.
-
-    Returns True if:
-    - No financials exist for the ticker, OR
-    - The latest report_date + 80 days <= today (new quarter likely reported)
-    """
-    return _is_stale("financials", "report_date", ticker, FINANCIALS_REFRESH_DAYS)
 
 
 def run_daily_pipeline(tickers: list[str], use_smart_scheduling: bool = False) -> None:
@@ -157,12 +158,14 @@ def run_daily_pipeline(tickers: list[str], use_smart_scheduling: bool = False) -
     except Exception as e:
         log.warning("Pipeline: news summarization failed (non-fatal): %s", e)
 
-    # 6. Quantitative screener (percentile-rank scoring)
+    # 6. Quantitative screener (percentile-rank scoring) — full universe, so
+    # scores keep pace with the night pipeline's rolling enrichment (local
+    # computation, ~1s).
     log.info("Pipeline: running quantitative screener...")
     try:
         from .screener import run_screener
 
-        scores = run_screener(tickers)
+        scores = run_screener()
         if not scores.empty:
             top = scores.sort_values("overall_score", ascending=False).head(5)
             log.info("Pipeline: screener top 5: %s", list(top.index))
@@ -336,52 +339,64 @@ def run_night_analysis(watchlist: list[str], limit: int = NIGHT_ANALYSIS_LIMIT) 
     return analyzed
 
 
+def _universe_scraped_today() -> bool:
+    """True if stock_universe was already scraped today (any ticker row)."""
+    conn = get_connection()
+    row = conn.execute("SELECT MAX(last_updated) FROM stock_universe").fetchone()
+    conn.close()
+    if not row or not row[0]:
+        return False
+    last = row[0] if isinstance(row[0], date) else row[0].date()
+    return last >= date.today()
+
+
 def run_night_pipeline(
     tickers: list[str] | None = None,
     fundamentals_limit: int = NIGHT_FUNDAMENTALS_LIMIT,
+    financials_limit: int = NIGHT_FINANCIALS_LIMIT,
     analyst_limit: int = NIGHT_ANALYST_LIMIT,
     enriched_limit: int = NIGHT_ENRICHED_LIMIT,
+    overview_limit: int = NIGHT_OVERVIEW_LIMIT,
     analysis_limit: int = NIGHT_ANALYSIS_LIMIT,
 ) -> None:
     """Night pipeline: universe refresh + bulk enrichment + analysis batch.
 
-    Runs 3x in the evening (see NIGHT_PIPELINE_TIMES in stock_bot/config.py).
-    1. Scrape universe (updates ratings, discovers new tickers)
-    2. Ingest financials for watchlist tickers (80-day cycle)
+    Runs 5x in the afternoon/evening (see NIGHT_PIPELINE_TIMES in
+    stock_bot/config.py).
+    1. Scrape universe (once per day; later runs reuse it)
+    2. Bulk-ingest financials (rolling, 80-day filing-cycle gate)
     3. Bulk-ingest fundamentals (rolling N/night, watchlist prioritized)
     4. Bulk-ingest analyst targets (rolling N/night, watchlist prioritized)
     5. Bulk-ingest ticker_enriched (rolling N/night, watchlist prioritized)
-    6. TradingAgents analysis (event-gated, capped at NIGHT_ANALYSIS_LIMIT)
+    6. Bulk-scrape AI overviews: Google Finance + Yahoo Finance
+    7. TradingAgents analysis (event-gated, capped at NIGHT_ANALYSIS_LIMIT)
     """
     from .universe import UniverseScraper
 
     log.info("=== Night pipeline started ===")
     t0 = time.time()
 
-    # 1. Universe scrape (all groups)
+    # 1. Universe scrape (all groups) — once per day is enough
     scraper = UniverseScraper()
-    all_tickers = scraper.scrape_all()
-    log.info("Night: universe scrape done — %d tickers in %.1fs",
-             len(all_tickers), time.time() - t0)
+    if _universe_scraped_today():
+        all_tickers = scraper.get_universe_tickers()
+        log.info("Night: universe already scraped today — reusing %d tickers",
+                 len(all_tickers))
+    else:
+        all_tickers = scraper.scrape_all()
+        log.info("Night: universe scrape done — %d tickers in %.1fs",
+                 len(all_tickers), time.time() - t0)
 
-    # 2. Financials for watchlist tickers (quarterly, 80-day cycle)
+    # 2. Financials (quarterly filings; refresh when report_date is ~80 days old)
     watchlist = tickers or []
-    if watchlist:
-        t1 = time.time()
-        fin_count = 0
-        for ticker in watchlist:
-            if should_ingest_financials(ticker):
-                log.info("Night: financials due for %s", ticker)
-                try:
-                    ingest_financials(ticker)
-                    fin_count += 1
-                except Exception as e:
-                    log.warning("Night: financials failed for %s (non-fatal): %s", ticker, e)
-                time.sleep(API_PAUSE)
-            else:
-                log.info("Night: financials still fresh for %s, skipping", ticker)
-        log.info("Night: financials done — %d refreshed in %.1fs",
-                 fin_count, time.time() - t1)
+    t1 = time.time()
+    fin_count = bulk_financials(
+        watchlist,
+        limit=financials_limit,
+        stale_days=FINANCIALS_REFRESH_DAYS,
+        skip_retry_days=SKIP_RETRY_DAYS,
+    )
+    log.info("Night: financials done — %d tickers in %.1fs", fin_count, time.time() - t1)
 
     # 3. Bulk-ingest fundamentals (rolling batch, watchlist prioritized, skip fresh)
     t2 = time.time()
@@ -414,7 +429,26 @@ def run_night_pipeline(
     log.info("Night: ticker_enriched done — %d tickers in %.1fs",
              enriched_count, time.time() - t4)
 
-    # 6. TradingAgents analysis (event-gated rolling batch, needs llama-server)
+    # 6. AI overviews (Google Finance + Yahoo Finance) — rolling batch so the
+    #    wider universe slowly gets coverage; the morning pipeline keeps the
+    #    watchlist fresh every day anyway.
+    t_ov = time.time()
+    gfin_count = bulk_gfinance_overviews(
+        watchlist,
+        limit=overview_limit,
+        stale_days=OVERVIEW_STALE_DAYS,
+        skip_retry_days=SKIP_RETRY_DAYS,
+    )
+    yfin_count = bulk_yfinance_overviews(
+        watchlist,
+        limit=overview_limit,
+        stale_days=OVERVIEW_STALE_DAYS,
+        skip_retry_days=SKIP_RETRY_DAYS,
+    )
+    log.info("Night: AI overviews done — %d gfinance + %d yfinance in %.1fs",
+             gfin_count, yfin_count, time.time() - t_ov)
+
+    # 7. TradingAgents analysis (event-gated rolling batch, needs llama-server)
     t5 = time.time()
     try:
         analyzed = run_night_analysis(watchlist, limit=analysis_limit)

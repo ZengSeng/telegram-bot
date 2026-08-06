@@ -59,7 +59,7 @@ def main() -> None:
     summary_time = dt.time(hour=SUMMARY_HOUR, minute=SUMMARY_MINUTE, tzinfo=tz)
     app.job_queue.run_daily(handlers.send_daily_summary, time=summary_time)
 
-    # Schedule night pipeline 3x in the evening (4 PM, 6 PM, 8 PM NZT)
+    # Schedule night pipeline 5x in the afternoon/evening (12 PM - 8 PM NZT)
     for hour, minute in NIGHT_PIPELINE_TIMES:
         night_time = dt.time(hour=hour, minute=minute, tzinfo=tz)
         app.job_queue.run_daily(handlers.run_night_pipeline_job, time=night_time)

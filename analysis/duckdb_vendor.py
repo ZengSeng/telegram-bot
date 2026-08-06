@@ -211,9 +211,21 @@ def get_news(ticker: str, start_date: str, end_date: str) -> str:
     return f"## {ticker} News, from {start_date} to {end_date}:\n\n{news_str}"
 
 
-def get_global_news(curr_date: str, look_back_days: int = 7, limit: int = 15) -> str:
-    """Return global news from DuckDB."""
+def get_global_news(curr_date: str, look_back_days: int = None, limit: int = None) -> str:
+    """Return global news from DuckDB.
+
+    The tool layer may omit look_back_days/limit (they're optional LLM tool
+    args); resolve them from DEFAULT_CONFIG like the yfinance vendor does
+    instead of crashing on None (killed the ALMU analysis on 2026-08-06).
+    """
     from dateutil.relativedelta import relativedelta
+
+    from tradingagents.default_config import DEFAULT_CONFIG
+
+    if look_back_days is None:
+        look_back_days = DEFAULT_CONFIG["global_news_lookback_days"]
+    if limit is None:
+        limit = DEFAULT_CONFIG["global_news_article_limit"]
 
     start_dt = datetime.strptime(curr_date, "%Y-%m-%d") - relativedelta(days=look_back_days)
     start_date = start_dt.strftime("%Y-%m-%d")

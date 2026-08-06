@@ -1,6 +1,7 @@
 """Small shared helpers used across data_eng modules."""
 
 import numpy as np
+import pandas as pd
 
 
 def safe_float(val, decimals: int = 2) -> float | None:
@@ -9,7 +10,7 @@ def safe_float(val, decimals: int = 2) -> float | None:
     Used when writing metric values to DuckDB / dicts so that non-finite
     numbers become explicit None instead of leaking NaN/inf downstream.
     """
-    if val is None:
+    if val is None or val is pd.NA:
         return None
     f = float(val)
     if np.isnan(f) or np.isinf(f):

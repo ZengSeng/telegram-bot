@@ -15,7 +15,15 @@ import logging
 import time
 
 from .db import SKIP_ATTEMPT_THRESHOLD, SKIP_RETRY_DAYS, clear_miss, get_connection, record_miss
-from .ingest import API_PAUSE, ingest_fundamentals, ingest_analyst_targets, ingest_enriched
+from .gfinance import ingest_gfinance_overview
+from .ingest import (
+    API_PAUSE,
+    ingest_analyst_targets,
+    ingest_enriched,
+    ingest_financials,
+    ingest_fundamentals,
+    ingest_yfinance_overview,
+)
 from .watchlist import load_watchlist
 
 log = logging.getLogger(__name__)
@@ -152,6 +160,7 @@ def _run_bulk_loop(
     skip_source: str | None,
     skip_retry_days: int,
     ingest_fn,
+    date_col: str = "date_fetched",
 ) -> int:
     """Shared priority-ordered bulk ingestion loop.
 
@@ -161,7 +170,7 @@ def _run_bulk_loop(
     """
     query, params = _build_priority_query(
         target_table, watchlist, sector, limit, stale_days,
-        skip_source, skip_retry_days,
+        skip_source, skip_retry_days, date_col=date_col,
     )
 
     conn = get_connection()
@@ -260,6 +269,31 @@ def bulk_analyst_targets(
 
 
 # ---------------------------------------------------------------------------
+# Bulk financials (night pipeline)
+# ---------------------------------------------------------------------------
+
+
+def bulk_financials(
+    watchlist: list[str],
+    limit: int = 130,
+    stale_days: int | None = None,
+    skip_source: str | None = "financials",
+    skip_retry_days: int = SKIP_RETRY_DAYS,
+) -> int:
+    """Bulk-ingest quarterly financials for the next batch of tickers.
+
+    Freshness is judged by the newest report_date (quarterly filing cycle),
+    not fetch time — pass stale_days ~80 (a new filing is expected ~80 days
+    after the last report_date).
+    """
+    return _run_bulk_loop(
+        "Bulk financials", "financials", watchlist, None, limit,
+        stale_days, skip_source, skip_retry_days, ingest_financials,
+        date_col="report_date",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Bulk ticker_enriched (night pipeline)
 # ---------------------------------------------------------------------------
 
@@ -280,4 +314,42 @@ def bulk_enriched(
     return _run_bulk_loop(
         "Bulk enriched", "ticker_enriched", watchlist, None, limit,
         stale_days, skip_source, skip_retry_days, ingest_enriched,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Bulk AI overviews (night pipeline)
+# ---------------------------------------------------------------------------
+
+
+def bulk_gfinance_overviews(
+    watchlist: list[str],
+    limit: int = 20,
+    stale_days: int | None = None,
+    skip_source: str | None = "gfinance_overview",
+    skip_retry_days: int = SKIP_RETRY_DAYS,
+) -> int:
+    """Bulk-scrape Google Finance AI overviews for the next batch of tickers.
+
+    Same priority ordering as the other bulk steps; the morning pipeline
+    keeps watchlist overviews fresh, so this extends coverage to the rest
+    of the universe.
+    """
+    return _run_bulk_loop(
+        "Bulk gfinance overview", "gfinance_overview", watchlist, None, limit,
+        stale_days, skip_source, skip_retry_days, ingest_gfinance_overview,
+    )
+
+
+def bulk_yfinance_overviews(
+    watchlist: list[str],
+    limit: int = 20,
+    stale_days: int | None = None,
+    skip_source: str | None = "yfinance_overview",
+    skip_retry_days: int = SKIP_RETRY_DAYS,
+) -> int:
+    """Bulk-scrape Yahoo Finance AI overviews for the next batch of tickers."""
+    return _run_bulk_loop(
+        "Bulk yfinance overview", "yfinance_overview", watchlist, None, limit,
+        stale_days, skip_source, skip_retry_days, ingest_yfinance_overview,
     )

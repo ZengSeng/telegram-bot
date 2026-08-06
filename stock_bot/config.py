@@ -50,8 +50,10 @@ SUMMARY_HOUR = 9
 SUMMARY_MINUTE = 30
 PIPELINE_HOUR = 8
 PIPELINE_MINUTE = 0
-# Night pipeline runs 3x in the afternoon/evening (hour, minute) — NZT
-NIGHT_PIPELINE_TIMES = [(16, 0), (18, 0), (20, 0)]
+# Night pipeline runs 5x in the afternoon/evening (hour, minute) — NZT.
+# More runs x smaller batches = same refresh cadence but more TradingAgents
+# analyses per day (see the scaled NIGHT_*_LIMIT constants in pipeline.py).
+NIGHT_PIPELINE_TIMES = [(12, 0), (14, 0), (16, 0), (18, 0), (20, 0)]
 LOCAL_TIMEZONE = "Pacific/Auckland"  # New Zealand
 
 # ---------------------------------------------------------------------------

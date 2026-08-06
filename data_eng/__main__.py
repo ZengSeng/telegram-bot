@@ -95,8 +95,10 @@ def main():
         run_night_pipeline(
             tickers=watchlist,
             fundamentals_limit=args.limit,
+            financials_limit=args.limit,
             analyst_limit=args.limit,
             enriched_limit=args.limit,
+            overview_limit=args.limit,
             analysis_limit=args.analysis_limit if args.analysis_limit is not None else NIGHT_ANALYSIS_LIMIT,
         )
     elif args.universe:

@@ -282,3 +282,102 @@ RKLB        42.430556
 2026-08-05 07:52:23,880 - data_eng.portfolio_review - INFO - Portfolio review: stored review for 2026-08-05 (1147 chars)
 2026-08-05 07:52:23,880 - data_eng.pipeline - INFO - Pipeline: portfolio review complete (1147 chars)
 2026-08-05 07:52:23,880 - data_eng.pipeline - INFO - === Daily pipeline complete ===
+
+
+
+Running daily pipeline for: RKLB, WDC, MU, SPCX
+2026-08-06 07:23:56,571 - data_eng.pipeline - INFO - === Daily pipeline started for 4 tickers ===
+2026-08-06 07:23:56,594 - data_eng.pipeline - INFO - Daily: batch prices for 2772 universe tickers
+2026-08-06 07:24:01,391 - data_eng.ingest - INFO - Batch downloading 2753 tickers from 2026-07-08 (incremental, 4 chunks)
+2026-08-06 07:26:19,544 - data_eng.ingest - INFO - Backfill: skipping 3 known no-data tickers (THR, VACH, CGCT)
+2026-08-06 07:26:19,544 - data_eng.ingest - INFO - Backfilling 16 tickers individually (new or >30d stale)
+2026-08-06 07:26:26,821 - yfinance - ERROR - $FONR: possibly delisted; no price data found  (1d 2026-05-29 -> 2026-08-06) (Yahoo error = "No data found, symbol may be delisted")
+2026-08-06 07:26:26,831 - yfinance - ERROR -
+1 Failed download:
+2026-08-06 07:26:26,831 - yfinance - ERROR - ['FONR']: possibly delisted; no price data found  (1d 2026-05-29 -> 2026-08-06) (Yahoo error = "No data found, symbol may be delisted")
+2026-08-06 07:26:26,832 - data_eng.ingest - WARNING - Batch download returned no data.
+2026-08-06 07:26:37,416 - data_eng.ingest - INFO - Batch ingest complete: 14463 rows for 2772 tickers
+2026-08-06 07:26:37,416 - data_eng.pipeline - INFO - Daily: computing technical indicators...
+2026-08-06 07:26:37,480 - data_eng.ingest - INFO - Technicals: 2720 tickers with sufficient price data
+2026-08-06 07:26:37,523 - data_eng.ingest - INFO - Technicals: 2720 to process (0 already done today)
+2026-08-06 07:26:42,746 - data_eng.ingest - INFO - Technicals: progress 100/2720 (100 ok)
+2026-08-06 07:26:47,941 - data_eng.ingest - INFO - Technicals: progress 200/2720 (200 ok)
+2026-08-06 07:26:53,144 - data_eng.ingest - INFO - Technicals: progress 300/2720 (300 ok)
+2026-08-06 07:26:58,353 - data_eng.ingest - INFO - Technicals: progress 400/2720 (400 ok)
+2026-08-06 07:27:03,574 - data_eng.ingest - INFO - Technicals: progress 500/2720 (500 ok)
+2026-08-06 07:27:08,794 - data_eng.ingest - INFO - Technicals: progress 600/2720 (600 ok)
+2026-08-06 07:27:14,022 - data_eng.ingest - INFO - Technicals: progress 700/2720 (700 ok)
+2026-08-06 07:27:19,247 - data_eng.ingest - INFO - Technicals: progress 800/2720 (800 ok)
+2026-08-06 07:27:24,480 - data_eng.ingest - INFO - Technicals: progress 900/2720 (900 ok)
+2026-08-06 07:27:29,676 - data_eng.ingest - INFO - Technicals: progress 1000/2720 (1000 ok)
+2026-08-06 07:27:34,916 - data_eng.ingest - INFO - Technicals: progress 1100/2720 (1100 ok)
+2026-08-06 07:27:40,162 - data_eng.ingest - INFO - Technicals: progress 1200/2720 (1200 ok)
+2026-08-06 07:27:45,431 - data_eng.ingest - INFO - Technicals: progress 1300/2720 (1300 ok)
+2026-08-06 07:27:50,693 - data_eng.ingest - INFO - Technicals: progress 1400/2720 (1400 ok)
+2026-08-06 07:27:55,975 - data_eng.ingest - INFO - Technicals: progress 1500/2720 (1500 ok)
+2026-08-06 07:28:01,269 - data_eng.ingest - INFO - Technicals: progress 1600/2720 (1600 ok)
+2026-08-06 07:28:06,547 - data_eng.ingest - INFO - Technicals: progress 1700/2720 (1700 ok)
+2026-08-06 07:28:11,833 - data_eng.ingest - INFO - Technicals: progress 1800/2720 (1800 ok)
+2026-08-06 07:28:17,143 - data_eng.ingest - INFO - Technicals: progress 1900/2720 (1900 ok)
+2026-08-06 07:28:22,508 - data_eng.ingest - INFO - Technicals: progress 2000/2720 (2000 ok)
+2026-08-06 07:28:27,810 - data_eng.ingest - INFO - Technicals: progress 2100/2720 (2100 ok)
+2026-08-06 07:28:33,151 - data_eng.ingest - INFO - Technicals: progress 2200/2720 (2200 ok)
+2026-08-06 07:28:38,449 - data_eng.ingest - INFO - Technicals: progress 2300/2720 (2300 ok)
+2026-08-06 07:28:43,815 - data_eng.ingest - INFO - Technicals: progress 2400/2720 (2400 ok)
+2026-08-06 07:28:49,431 - data_eng.ingest - INFO - Technicals: progress 2500/2720 (2500 ok)
+2026-08-06 07:28:54,752 - data_eng.ingest - INFO - Technicals: progress 2600/2720 (2600 ok)
+2026-08-06 07:29:00,098 - data_eng.ingest - INFO - Technicals: progress 2700/2720 (2700 ok)
+2026-08-06 07:29:01,166 - data_eng.ingest - INFO - Technicals: complete — 2720/2720 processed
+2026-08-06 07:29:01,167 - data_eng.pipeline - INFO - Pipeline: processing RKLB
+2026-08-06 07:29:01,811 - data_eng.ingest - INFO - Ingested 50 news articles for RKLB
+2026-08-06 07:29:03,311 - data_eng.pipeline - INFO - Pipeline: processing WDC
+2026-08-06 07:29:03,914 - data_eng.ingest - INFO - Ingested 50 news articles for WDC
+2026-08-06 07:29:05,414 - data_eng.pipeline - INFO - Pipeline: processing MU
+2026-08-06 07:29:06,067 - data_eng.ingest - INFO - Ingested 50 news articles for MU
+2026-08-06 07:29:07,567 - data_eng.pipeline - INFO - Pipeline: processing SPCX
+2026-08-06 07:29:08,254 - data_eng.ingest - INFO - Ingested 50 news articles for SPCX
+2026-08-06 07:29:15,460 - data_eng.ingest - INFO - Ingested 30 global news articles
+2026-08-06 07:29:15,460 - data_eng.pipeline - INFO - Pipeline: scraping Google Finance overviews, bull and bear view...
+2026-08-06 07:29:26,013 - data_eng.gfinance - INFO - Google Finance overview for RKLB: 67.9% bullish, 3 bull / 3 bear points
+2026-08-06 07:29:32,069 - data_eng.gfinance - INFO - Google Finance overview for WDC: 40.6% bullish, 3 bull / 3 bear points
+2026-08-06 07:29:38,929 - data_eng.gfinance - INFO - Google Finance overview for MU: 50.5% bullish, 3 bull / 3 bear points
+2026-08-06 07:29:48,000 - data_eng.gfinance - INFO - Google Finance overview for SPCX: 33.0% bullish, 3 bull / 3 bear points
+2026-08-06 07:29:48,000 - data_eng.pipeline - INFO - Pipeline: fetching Yahoo Finance overviews...
+2026-08-06 07:29:48,000 - data_eng.ingest - INFO - Fetching yfinance overview for RKLB ...
+2026-08-06 07:29:52,520 - data_eng.ingest - INFO - yfinance overview for RKLB: ok
+2026-08-06 07:29:52,520 - data_eng.ingest - INFO - Fetching yfinance overview for WDC ...
+2026-08-06 07:29:57,327 - data_eng.ingest - INFO - yfinance overview for WDC: ok
+2026-08-06 07:29:57,328 - data_eng.ingest - INFO - Fetching yfinance overview for MU ...
+2026-08-06 07:30:02,483 - data_eng.ingest - INFO - yfinance overview for MU: ok
+2026-08-06 07:30:02,483 - data_eng.ingest - INFO - Fetching yfinance overview for SPCX ...
+2026-08-06 07:30:05,854 - data_eng.ingest - INFO - yfinance overview for SPCX: ok
+2026-08-06 07:30:05,854 - data_eng.pipeline - INFO - Pipeline: generating AI news summaries...
+2026-08-06 07:30:05,868 - data_eng.summarize - INFO - Summarizing news for MU (26 articles)...
+2026-08-06 07:30:36,445 - data_eng.summarize - INFO - Stored summary for MU
+2026-08-06 07:30:36,445 - data_eng.summarize - INFO - Summarizing news for RKLB (6 articles)...
+2026-08-06 07:30:53,395 - data_eng.summarize - INFO - Stored summary for RKLB
+2026-08-06 07:30:53,395 - data_eng.summarize - INFO - Summarizing news for SPCX (40 articles)...
+2026-08-06 07:31:09,966 - data_eng.summarize - INFO - Stored summary for SPCX
+2026-08-06 07:31:09,966 - data_eng.summarize - INFO - Summarizing news for WDC (4 articles)...
+2026-08-06 07:31:29,299 - data_eng.summarize - INFO - Stored summary for WDC
+2026-08-06 07:31:29,299 - data_eng.pipeline - INFO - Pipeline: summarized 4 ticker(s)
+2026-08-06 07:31:29,299 - data_eng.pipeline - INFO - Pipeline: running quantitative screener...
+2026-08-06 07:31:29,316 - data_eng.screener - INFO - Screener: computing metrics for 445 tickers...
+2026-08-06 07:31:29,598 - data_eng.pipeline - WARNING - Pipeline: screener failed (non-fatal): float() argument must be a string or a real number, not 'NAType'
+2026-08-06 07:31:29,600 - data_eng.pipeline - INFO - Pipeline: selecting candidates...
+2026-08-06 07:31:29,600 - data_eng.candidates - INFO - Candidates: loading scored tickers with sector...
+2026-08-06 07:31:29,618 - data_eng.candidates - INFO - Candidates: 72 scored tickers available
+2026-08-06 07:31:29,620 - data_eng.candidates - INFO - Candidates: 7 tickers after sector allocation
+2026-08-06 07:31:29,646 - data_eng.candidates - INFO - Candidates: final selection = 7 tickers: ['MU', 'RELY', 'DLO', 'YOU', 'NVDA', 'SPCX', 'RKLB']
+2026-08-06 07:31:29,690 - data_eng.candidates - INFO - Candidates: stored 7 rows for 2026-08-06
+2026-08-06 07:31:29,690 - data_eng.pipeline - INFO - Pipeline: 7 candidates selected: ['MU', 'RELY', 'DLO', 'YOU', 'NVDA', 'SPCX', 'RKLB']
+2026-08-06 07:31:29,690 - data_eng.pipeline - INFO - Pipeline: running portfolio engine...
+2026-08-06 07:31:29,757 - data_eng.portfolio_engine - INFO - Portfolio engine: capital=$10000, invested=$18960, deployable=$0
+2026-08-06 07:31:29,800 - data_eng.portfolio_engine - INFO - Portfolio engine: stored 6 decisions for 2026-08-06
+2026-08-06 07:31:29,800 - data_eng.portfolio_engine - INFO - Portfolio engine: 0 BUY, 1 SELL, 5 HOLD
+2026-08-06 07:31:29,800 - data_eng.pipeline - INFO - Pipeline: portfolio engine done — 0 BUY, 1 SELL
+2026-08-06 07:31:29,800 - data_eng.pipeline - INFO - Pipeline: running portfolio review...
+2026-08-06 07:31:29,828 - data_eng.portfolio_review - INFO - Portfolio review: asking LLM to review 6 decisions...
+2026-08-06 07:31:49,795 - data_eng.portfolio_review - INFO - Portfolio review: stored review for 2026-08-06 (721 chars)
+2026-08-06 07:31:49,795 - data_eng.pipeline - INFO - Pipeline: portfolio review complete (721 chars)
+2026-08-06 07:31:49,795 - data_eng.pipeline - INFO - === Daily pipeline complete ===
