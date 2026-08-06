@@ -5,7 +5,7 @@
 | Time | Job |
 |------|-----|
 | 8:00 AM | Daily pipeline (`run_daily_pipeline`, data refresh + portfolio chain) |
-| 9:30 AM | Portfolio summary sent to Telegram |
+| 9:30 AM | Portfolio summary + morning briefing sent to Telegram (trade plan, committee review, news) |
 | 12:00 PM | Night pipeline (bulk enrichment + TradingAgents batch) |
 | 2:00 PM | Night pipeline (bulk enrichment + TradingAgents batch) |
 | 4:00 PM | Night pipeline (bulk enrichment + TradingAgents batch) |
@@ -50,7 +50,13 @@ TradingAgents (`trading_agent_decisions`) **moved to the night pipeline** —
 see below. The morning run reuses the latest stored decisions; on-demand
 single-ticker analysis is still available via `/analyze <TICKER>` in the bot.
 
-**Dependency chain:** `fundamentals`/`technicals` → screener → candidates → portfolio engine → review. TradingAgents runs in the evening on the same queue (candidates + watchlist).
+**Dependency chain:** `fundamentals`/`technicals` → screener → candidates → candidate news → portfolio engine → review. TradingAgents runs in the evening on the same queue (candidates + watchlist).
+
+**Candidate news (step 7b):** after candidate selection, the pipeline
+ingests news + generates AI summaries for candidates that aren't on the
+watchlist. This way the evening TradingAgents analyses have fresh news for
+them too (before this, off-watchlist candidates were analyzed with stale or
+missing news).
 
 ### Observed run time (measured 2026-08-06, ~2,772 universe / 4 watchlist)
 
@@ -133,6 +139,22 @@ Everything served from local DuckDB — no live network during an analysis:
 - **Verified market snapshot from local prices**: the validator's OHLCV
   loader is patched to read `daily_prices` instead of a live 5-year yfinance
   download (removes network + rate-limit risk mid-analysis).
+- **Risk debate is rule-based — no LLM calls** (changed 2026-08-06): the
+  aggressive/neutral/conservative debaters are replaced with LLM-free nodes
+  that write a fixed-perspective stance into the debate history (saves ~3
+  long generations per analysis — each otherwise received all analyst
+  reports plus full context). The trader plan is NOT echoed in the notes;
+  the Portfolio Manager receives it directly. The PM still weighs the
+  trader plan against the three stances.
+- **Output token caps**: quick-tier generations capped at 1536 tokens,
+  deep-tier at 2048 (`LLM_MAX_TOKENS_*` in `analysis/runner.py`). The GPU is
+  generation-bound (~96% util), so runaway outputs were the biggest time
+  sink; caps remove the long tail without touching the short structured
+  outputs (trader/PM JSON).
+- **Reports**: only the consolidated report is kept —
+  `data/analysis_reports/reports/TICKER_TIMESTAMP.md` (e.g.
+  `FROG_20260806_211112.md`). The per-section tree (1_analysts/… etc.) is no
+  longer written.
 - **Stubbed**: Reddit, StockTwits, FRED macro, Polymarket prediction markets
   (no keys/integrations) — each returns a "not available" string.
 - All analyst data tools (prices, indicators, fundamentals, statements, news,
@@ -189,7 +211,10 @@ its staleness threshold. Capacity (limit × 5 runs) is sized to cover it:
 
 - Ingestion (steps 1-6), **worst case** (full limits, clearing a backlog): ~35 min.
 - Typical steady state: ~20-30 min (most steps only process stale tickers; overviews add Playwright scrape time).
-- TradingAgents adds up to 6 × ~6 min = ~36 min when the budget is full (bull/bear LLM calls removed).
+- TradingAgents adds up to 6 analyses when the budget is full. With
+  bull/bear AND the risk trio LLM-free plus output token caps (2026-08-06),
+  per-analysis time should drop well below the measured ~6 min — re-measure
+  on the next night run.
 - Total stays well under the 2-hour spacing; if runs ever overlap, lower
   `NIGHT_ANALYSIS_LIMIT` first — unfinished tickers just roll over.
 
@@ -211,6 +236,31 @@ One analysis failure on day 1 (ALMU): the LLM called the `get_global_news`
 tool without the optional `look_back_days`/`limit` args and the DuckDB vendor
 crashed on `None`. Fixed on 2026-08-06 — the vendor now resolves omitted args
 from `DEFAULT_CONFIG`, same as the yfinance vendor.
+
+---
+
+## Telegram Briefing & Advice
+
+The 9:30 AM push is a full morning briefing (sent after the charts +
+portfolio summary):
+
+1. **Trade plan** — today's BUY proposals (shares, % of portfolio, stop loss,
+   reason) and SELLs from `portfolio_decisions`; HOLD count only.
+2. **Committee review** — the LLM investment-committee review from
+   `portfolio_reviews` (previously generated but never shown).
+3. **News briefing** — AI news summaries (Catalysts/Sentiment/Risks format)
+   for watchlist + today's candidates.
+
+`/advice` command (on demand):
+
+- `/advice` — same trade plan + **Ideas**: top 3 screener tickers you don't
+  hold and haven't watched (score, price + day change, latest TradingAgents
+  verdict if analyzed).
+- `/advice TICKER` — full card: latest price + day change, screener score,
+  latest TradingAgents decision (action/rating, entry/stop/target, horizon,
+  trimmed summary), and latest news summary.
+
+All reads are straight from DuckDB — no LLM call at command time.
 
 ---
 
@@ -251,3 +301,6 @@ python -m data_eng --enrich --sector technology --limit 20
 - `daily_prices` uses a fast bulk incremental download, chunked 700 tickers per yfinance request with pauses between chunks, plus one retry pass after 20s for rate-limited tickers (constants `PRICE_CHUNK_SIZE` / `PRICE_CHUNK_PAUSE` / `PRICE_RETRY_PAUSE` in ingest.py). Only tickers with no data or stale > 30 days are backfilled one-at-a-time; repeat no-data tickers are skipped via `skip_tickers` (source `prices`).
 - The manual `--enrich` CLI does NOT skip fresh tickers (processes up to `--limit` regardless of age) so it behaves predictably for one-off runs; the scheduled night pipeline is the one that skips fresh.
 - `rating` in stock_universe has string `'nan'` values (~270 rows) treated as lowest priority; consider normalizing to NULL someday.
+- **Portfolio sizing uses market value, not cost basis**: deployable capital = `TOTAL_CAPITAL` ($28,000) × 90% − current holdings value at latest close. Market value is correct here — new buys are sized against what the portfolio is worth now.
+- **`trade_signal` is a trend regime, not a prediction** (changed 2026-08-06): majority vote of three consistently trend-following tests — close vs SMA50, SMA20 vs SMA50, MACD histogram sign. It replaced the old hand-picked weighted sum that mixed trend and mean-reversion signals. Its only consumer is the `technical_change` event gate, which re-analyzes a ticker when the regime flips.
+- **Data provenance**: see `notes/report_definition.md` for where every number in `/advice` and the 9:30 briefing comes from (external source → DuckDB table → display).

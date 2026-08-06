@@ -181,7 +181,27 @@ def run_daily_pipeline(tickers: list[str], use_smart_scheduling: bool = False) -
         if not candidates.empty:
             log.info("Pipeline: %d candidates selected: %s", len(candidates), list(candidates["ticker"]))
     except Exception as e:
+        candidates = None
         log.warning("Pipeline: candidate selection failed (non-fatal): %s", e)
+
+    # 7b. News + summaries for candidates outside the watchlist, so the
+    # evening TradingAgents analyses have fresh news for them too.
+    if candidates is not None and not candidates.empty:
+        new_names = [t for t in candidates["ticker"] if t not in set(tickers)]
+        if new_names:
+            log.info("Pipeline: refreshing news for %d candidates: %s",
+                     len(new_names), new_names)
+            for ticker in new_names:
+                try:
+                    ingest_news(ticker)
+                except Exception as e:
+                    log.warning("Pipeline: candidate news failed for %s (non-fatal): %s",
+                                ticker, e)
+                time.sleep(API_PAUSE)
+            try:
+                generate_news_summaries(new_names)
+            except Exception as e:
+                log.warning("Pipeline: candidate summaries failed (non-fatal): %s", e)
 
     # 8. Portfolio engine (deterministic rules on decisions + scores)
     try:

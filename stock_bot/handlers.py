@@ -77,7 +77,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/gains - realized/unrealized P&L\n"
         "/analyze <TICKER> - run trading agent analysis\n"
         "/summary [TICKER] - trading agent decisions\n"
-        "/news - AI news summaries (from pipeline)"
+        "/news - AI news summaries (from pipeline)\n"
+        "/advice [TICKER] - trade plan + ideas / full buy card"
     )
 
 
@@ -172,7 +173,12 @@ async def portfolio_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 
 async def send_daily_summary(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Scheduled daily portfolio summary — sent to all registered users."""
+    """Scheduled daily portfolio summary — sent to all registered users.
+
+    Sends charts + portfolio state, then the morning briefing: today's
+    trade plan (BUY/SELL proposals), the LLM committee review, and news
+    summaries for watchlist + candidates.
+    """
     chat_ids = load_chat_ids()
     if not chat_ids:
         log.warning("No chat_ids saved — no user has run /start")
@@ -180,6 +186,7 @@ async def send_daily_summary(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     tickers = get_chart_tickers()
     msg = build_portfolio_summary()
+    briefing = _build_morning_briefing()
 
     for chat_id in chat_ids:
         try:
@@ -188,6 +195,8 @@ async def send_daily_summary(context: ContextTypes.DEFAULT_TYPE) -> None:
                 if chart:
                     await context.bot.send_photo(chat_id=chat_id, photo=chart)
             await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode="HTML")
+            for text in briefing:
+                await context.bot.send_message(chat_id=chat_id, text=text)
         except Exception as e:
             log.warning("Failed to send summary to %s: %s", chat_id, e)
 
@@ -327,6 +336,127 @@ async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 # ---------------------------------------------------------------------------
+# Morning briefing (trade plan + committee review + news)
+# ---------------------------------------------------------------------------
+
+
+def _build_trade_plan() -> str:
+    """Today's actionable BUY/SELL proposals from the portfolio engine."""
+    from data_eng.db import get_connection
+
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT ticker, action, position_pct, shares, stop_loss, reason
+           FROM portfolio_decisions WHERE date = CURRENT_DATE"""
+    ).fetchall()
+    conn.close()
+
+    buys = [r for r in rows if r[1] == "BUY"]
+    sells = [r for r in rows if r[1] == "SELL"]
+    holds = [r for r in rows if r[1] == "HOLD"]
+
+    lines = [f"\U0001f9ed Trade plan ({dt.date.today()})"]
+    if not buys and not sells:
+        lines.append("No buy/sell actions today — positions hold.")
+        return "\n".join(lines)
+
+    for t, _, pct, shares, stop, reason in buys:
+        stop_txt = f", stop ${stop:.2f}" if stop else ""
+        pct_txt = f" ({pct:.1f}%)" if pct else ""
+        lines.append(f"\U0001f7e2 BUY {t}: {shares:.0f} sh{pct_txt}{stop_txt}"
+                     + (f" — {reason}" if reason else ""))
+    for t, _, _, shares, _, reason in sells:
+        lines.append(f"\U0001f534 SELL {t}: {shares:.0f} sh"
+                     + (f" — {reason}" if reason else ""))
+    if holds:
+        lines.append(f"\u26aa HOLD: {len(holds)} positions unchanged")
+    return "\n".join(lines)
+
+
+def _build_committee_review() -> str:
+    """Today's LLM investment-committee review, or '' if none."""
+    from data_eng.db import get_connection
+
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT review_text FROM portfolio_reviews WHERE date = CURRENT_DATE"
+    ).fetchone()
+    conn.close()
+    if not row:
+        return ""
+    text = f"\U0001f3db Committee review:\n{row[0]}"
+    if len(text) > 4000:
+        text = text[:4000] + "\n...(truncated)"
+    return text
+
+
+def _briefing_news_tickers() -> list[str]:
+    """Watchlist + today's selected candidates (deduped, ordered)."""
+    from data_eng.db import get_connection
+
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT ticker FROM candidates
+           WHERE removed_reason IS NULL
+             AND date_selected = (SELECT MAX(date_selected) FROM candidates)"""
+    ).fetchall()
+    conn.close()
+    return list(dict.fromkeys(load_watchlist() + [r[0] for r in rows]))
+
+
+def _build_news_briefing() -> str:
+    """Today's AI news summaries for watchlist + candidates, chunked text."""
+    from data_eng.db import get_connection
+
+    tickers = _briefing_news_tickers()
+    if not tickers:
+        return ""
+
+    conn = get_connection()
+    placeholders = ", ".join(["?"] * len(tickers))
+    rows = conn.execute(
+        f"""SELECT ticker, summary FROM news_summaries
+            WHERE date = CURRENT_DATE AND ticker IN ({placeholders})
+            ORDER BY ticker""",
+        tickers,
+    ).fetchall()
+    conn.close()
+
+    if not rows:
+        return ""
+
+    lines = ["\U0001f4f0 News briefing"]
+    for ticker, summary in rows:
+        lines.append(f"\n\U0001f4f0 {ticker}\n{summary}")
+    text = "\n".join(lines)
+    if len(text) > 4000:
+        text = text[:4000] + "\n...(truncated — /news for the full list)"
+    return text
+
+
+def _build_morning_briefing() -> list[str]:
+    """Assemble the 9:30 AM push messages after the portfolio summary."""
+    messages = []
+    try:
+        messages.append(_build_trade_plan())
+    except Exception as e:
+        log.warning("Briefing: trade plan failed: %s", e)
+    try:
+        review = _build_committee_review()
+        if review:
+            messages.append(review)
+    except Exception as e:
+        log.warning("Briefing: committee review failed: %s", e)
+    try:
+        news = _build_news_briefing()
+        if news:
+            messages.append(news)
+    except Exception as e:
+        log.warning("Briefing: news failed: %s", e)
+    return messages
+
+
+# ---------------------------------------------------------------------------
 # News command
 # ---------------------------------------------------------------------------
 
@@ -366,6 +496,203 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         text = f"📰 {ticker} ({summary_date})\n\n{summary}"
         if len(text) > 4000:
             text = text[:4000] + "\n...(truncated)"
+        await update.message.reply_text(text)
+
+
+# ---------------------------------------------------------------------------
+# Advice command — buy/sell guidance + new ideas
+# ---------------------------------------------------------------------------
+
+
+def _latest_price(ticker: str) -> tuple[float | None, float | None]:
+    """(latest close, day-over-day % change) from daily_prices."""
+    from data_eng.db import get_connection
+
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT close FROM daily_prices WHERE ticker = ? ORDER BY date DESC LIMIT 2",
+        [ticker],
+    ).fetchall()
+    conn.close()
+    if not rows or rows[0][0] is None:
+        return None, None
+    latest = float(rows[0][0])
+    if len(rows) > 1 and rows[1][0]:
+        prev = float(rows[1][0])
+        return latest, (latest - prev) / prev * 100 if prev else None
+    return latest, None
+
+
+def _latest_ta_decision(ticker: str) -> dict | None:
+    """Latest TradingAgents decision for a ticker, or None."""
+    from data_eng.db import get_connection
+
+    conn = get_connection()
+    row = conn.execute(
+        """SELECT date, action, rating, price_target, entry_price, stop_loss,
+                  time_horizon, summary
+           FROM trading_agent_decisions
+           WHERE ticker = ? ORDER BY date DESC LIMIT 1""",
+        [ticker],
+    ).fetchone()
+    conn.close()
+    if not row:
+        return None
+    return {
+        "date": row[0], "action": row[1], "rating": row[2],
+        "price_target": row[3], "entry_price": row[4], "stop_loss": row[5],
+        "time_horizon": row[6], "summary": row[7],
+    }
+
+
+def _latest_screener_score(ticker: str) -> float | None:
+    from data_eng.db import get_connection
+
+    conn = get_connection()
+    row = conn.execute(
+        """SELECT overall_score FROM screener_scores
+           WHERE ticker = ? ORDER BY date_scored DESC LIMIT 1""",
+        [ticker],
+    ).fetchone()
+    conn.close()
+    return float(row[0]) if row and row[0] is not None else None
+
+
+def _top_ideas(exclude: set[str], limit: int = 3) -> list[str]:
+    """Highest-scored screener tickers not already held or watched."""
+    from data_eng.db import get_connection
+
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT s.ticker
+           FROM screener_scores s
+           INNER JOIN (
+               SELECT ticker, MAX(date_scored) AS max_date
+               FROM screener_scores GROUP BY ticker
+           ) latest ON s.ticker = latest.ticker AND s.date_scored = latest.max_date
+           WHERE s.overall_score IS NOT NULL
+           ORDER BY s.overall_score DESC"""
+    ).fetchall()
+    conn.close()
+
+    ideas = []
+    for (t,) in rows:
+        if t in exclude:
+            continue
+        ideas.append(t)
+        if len(ideas) >= limit:
+            break
+    return ideas
+
+
+def _advice_card(ticker: str) -> str:
+    """Full 'what do I need to know' card for one ticker."""
+    lines = [f"\U0001f4a1 {ticker}"]
+
+    price, change = _latest_price(ticker)
+    if price:
+        chg = f" ({change:+.1f}%)" if change is not None else ""
+        lines.append(f"Price: ${price:.2f}{chg}")
+
+    score = _latest_screener_score(ticker)
+    if score is not None:
+        lines.append(f"Screener: {score:.0f}/100")
+
+    d = _latest_ta_decision(ticker)
+    if d:
+        verdict = d["action"] or "?"
+        if d["rating"]:
+            verdict += f" / {d['rating']}"
+        lines.append(f"TradingAgents ({d['date']}): {verdict}")
+        levels = []
+        if d["entry_price"]:
+            levels.append(f"entry ${d['entry_price']:.2f}")
+        if d["stop_loss"]:
+            levels.append(f"stop ${d['stop_loss']:.2f}")
+        if d["price_target"]:
+            levels.append(f"target ${d['price_target']:.2f}")
+        if levels:
+            lines.append("  " + " | ".join(levels))
+        if d["time_horizon"]:
+            lines.append(f"  Horizon: {d['time_horizon']}")
+        if d["summary"]:
+            summary = d["summary"]
+            if len(summary) > 400:
+                summary = summary[:400] + "…"
+            lines.append(f"  {summary}")
+    else:
+        lines.append("TradingAgents: no analysis yet — /analyze " + ticker)
+
+    # Latest news summary (today preferred, else most recent)
+    from data_eng.db import get_connection
+
+    conn = get_connection()
+    row = conn.execute(
+        """SELECT date, summary FROM news_summaries
+           WHERE ticker = ? ORDER BY date DESC LIMIT 1""",
+        [ticker],
+    ).fetchone()
+    conn.close()
+    if row:
+        lines.append(f"\n\U0001f4f0 News ({row[0]}):\n{row[1]}")
+
+    text = "\n".join(lines)
+    if len(text) > 4000:
+        text = text[:4000] + "\n...(truncated)"
+    return text
+
+
+async def advice_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Buy/sell guidance.
+
+    /advice TICKER — full card: price, TradingAgents verdict + levels,
+    screener score, and latest news summary.
+    /advice — today's trade plan (BUY/SELL proposals) plus the top screener
+    ideas you don't hold and haven't watched.
+    """
+    if context.args:
+        await update.message.reply_text(_advice_card(context.args[0].upper()))
+        return
+
+    messages = []
+    try:
+        messages.append(_build_trade_plan())
+    except Exception as e:
+        log.warning("Advice: trade plan failed: %s", e)
+
+    # Ideas: top screener tickers not held and not on the watchlist
+    try:
+        from data_eng.portfolio_engine import _load_net_holdings
+
+        exclude = set(_load_net_holdings()) | set(load_watchlist())
+        ideas = _top_ideas(exclude)
+        if ideas:
+            lines = ["\n\U0001f4a1 Ideas (top screener, not held/watched):"]
+            for i, ticker in enumerate(ideas, 1):
+                score = _latest_screener_score(ticker)
+                price, change = _latest_price(ticker)
+                bits = []
+                if score is not None:
+                    bits.append(f"score {score:.0f}")
+                if price:
+                    chg = f" {change:+.1f}%" if change is not None else ""
+                    bits.append(f"${price:.2f}{chg}")
+                d = _latest_ta_decision(ticker)
+                if d and d["action"]:
+                    ta_bit = f"TA: {d['action']} ({d['date']})"
+                    if d["price_target"]:
+                        ta_bit += f" target ${d['price_target']:.2f}"
+                    bits.append(ta_bit)
+                lines.append(f"{i}. {ticker} — " + ", ".join(bits))
+            lines.append("\n/advice TICKER for the full card")
+            messages.append("\n".join(lines))
+    except Exception as e:
+        log.warning("Advice: ideas failed: %s", e)
+
+    if not messages:
+        await update.message.reply_text("Nothing to show yet — run the daily pipeline first.")
+        return
+    for text in messages:
         await update.message.reply_text(text)
 
 

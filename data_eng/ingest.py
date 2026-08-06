@@ -532,16 +532,30 @@ def compute_technicals(ticker: str) -> dict:
     vr = result.get("volume_ratio")
     result["signal_volume"] = 1 if vr and vr > 1.5 else (-1 if vr and vr < 0.5 else 0)
 
-    # Combined
-    combined = (
-        result["signal_rsi"] * 0.25 +
-        result["signal_macd"] * 0.25 +
-        result["signal_trend"] * 0.20 +
-        result["signal_bb"] * 0.15 +
-        result["signal_volume"] * 0.15
-    )
-    result["combined_signal"] = round(combined, 4)
-    result["trade_signal"] = 1 if combined > 0.3 else (-1 if combined < -0.3 else 0)
+    # Trade regime: three independent, consistently trend-following tests,
+    # equal-weighted majority. Replaces the old hand-picked weighted sum of
+    # mixed trend/mean-reversion signals. Its only consumer is the
+    # technical_change event gate (events.py), which re-analyzes a ticker
+    # when the regime flips — no tuned thresholds, each rule is a standard
+    # definition.
+    sma50 = result.get("sma_50")
+    macd_hist = result.get("macd_hist")
+
+    trend_votes = []
+    if sma50 is not None:
+        trend_votes.append(1 if last_close > sma50 else -1)   # price vs SMA50
+    if sma20 is not None and sma50 is not None:
+        trend_votes.append(1 if sma20 > sma50 else -1)        # SMA20 vs SMA50
+    if macd_hist is not None:
+        trend_votes.append(1 if macd_hist > 0 else -1)        # MACD histogram
+
+    if trend_votes:
+        regime = sum(trend_votes) / len(trend_votes)          # in [-1, 1]
+    else:
+        regime = 0.0
+    # 3 votes -> regime is one of -1, -1/3, 1/3, 1; 2 votes -> ±1/2, ±1
+    result["combined_signal"] = round(regime, 4)
+    result["trade_signal"] = 1 if regime > 0 else (-1 if regime < 0 else 0)
 
     return result
 

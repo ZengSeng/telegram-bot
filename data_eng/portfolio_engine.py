@@ -167,14 +167,15 @@ def run_portfolio_engine(total_capital: float | None = None) -> list[dict]:
     all_tickers = list(set(list(holdings.keys()) + list(decisions.keys())))
     prices = _load_current_prices(all_tickers)
 
-    # Current portfolio state
-    invested_value = sum(
+    # Current portfolio state (market value — sizing must reflect what the
+    # holdings are worth now, not what was paid for them)
+    market_value = sum(
         shares * prices.get(t, 0) for t, shares in holdings.items()
     )
-    deployable = capital * (1 - CASH_RESERVE_PCT) - invested_value
+    deployable = capital * (1 - CASH_RESERVE_PCT) - market_value
 
-    log.info("Portfolio engine: capital=$%.0f, invested=$%.0f, deployable=$%.0f",
-             capital, invested_value, max(deployable, 0))
+    log.info("Portfolio engine: capital=$%.0f, market value=$%.0f, deployable=$%.0f",
+             capital, market_value, max(deployable, 0))
 
     # Sector exposure tracking (current)
     sector_value: dict[str, float] = defaultdict(float)
@@ -208,8 +209,20 @@ def run_portfolio_engine(total_capital: float | None = None) -> list[dict]:
 
         # BUY candidate: has a buy decision
         if action == "buy":
-            # Rule: screener score must be top 20%
-            if score is not None and score < MIN_SCREENER_SCORE:
+            # Rule: screener score must be top 20% — an unscored ticker
+            # (no fundamentals yet) cannot be in the top 20%, so it's
+            # blocked too (RBRK slipped through here on 2026-08-06)
+            if score is None:
+                results.append({
+                    "ticker": ticker,
+                    "action": "HOLD",
+                    "position_pct": (held_shares * price / capital * 100) if price else 0,
+                    "shares": held_shares,
+                    "stop_loss": None,
+                    "reason": "No screener score (missing fundamentals)",
+                })
+                continue
+            if score < MIN_SCREENER_SCORE:
                 results.append({
                     "ticker": ticker,
                     "action": "HOLD",

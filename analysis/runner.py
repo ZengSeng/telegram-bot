@@ -2,7 +2,9 @@
 
 import json
 import logging
-from datetime import date
+import shutil
+import tempfile
+from datetime import date, datetime
 from pathlib import Path
 
 # Local llama.cpp endpoint + model alias (single source: stock_bot/config.py)
@@ -12,6 +14,13 @@ log = logging.getLogger(__name__)
 
 # Where reports are saved
 REPORTS_DIR = Path(__file__).parent.parent / "data" / "analysis_reports"
+
+# Hard cap on tokens per LLM generation. The GPU is generation-bound
+# (~96% util), so runaway outputs are the biggest time sink; capping
+# removes the long tail. Structured outputs (trader/PM JSON) are short
+# and unaffected.
+LLM_MAX_TOKENS_QUICK = 1536
+LLM_MAX_TOKENS_DEEP = 2048
 
 
 # ---------------------------------------------------------------------------
@@ -108,6 +117,61 @@ def _create_gfinance_evidence_node(side: str):
     return factory
 
 
+def _create_rule_based_risk_node(role: str):
+    """LLM-free risk debater: writes a fixed-perspective stance straight
+    into the debate history.
+
+    Same pattern as the gfinance bull/bear nodes — no model call, saving
+    three long generations per analysis (each risk node otherwise receives
+    all four reports plus the full debate context). The debate keeps its
+    shape (routing needs latest_speaker + count), and the Portfolio
+    Manager still weighs the trader plan against these three stances —
+    the plan itself is passed to the PM separately, so the notes don't
+    repeat it.
+    """
+    labels = {
+        "aggressive": (
+            "Aggressive",
+            "Upside-first stance: the opportunity in the trader's plan "
+            "stands; favor full participation and treat drawdowns as "
+            "acceptable within the thesis. Challenge any overly cautious "
+            "readings of the same data.",
+        ),
+        "neutral": (
+            "Neutral",
+            "Balanced stance: weigh the trader's plan on evidence only — "
+            "accept what the data supports, flag what it does not, and "
+            "size the position accordingly.",
+        ),
+        "conservative": (
+            "Conservative",
+            "Downside-first stance: capital preservation leads — honor the "
+            "stop loss, question weak evidence in the trader's plan, and "
+            "prefer smaller exposure when signals conflict.",
+        ),
+    }
+    label, stance = labels[role]
+
+    def factory(llm):
+        def node(state) -> dict:
+            risk = state["risk_debate_state"]
+            argument = f"{label} Analyst: {stance}"
+
+            new_risk = dict(risk)
+            new_risk["history"] = risk.get("history", "") + "\n" + argument
+            new_risk[f"{role}_history"] = (
+                risk.get(f"{role}_history", "") + "\n" + argument
+            )
+            new_risk["latest_speaker"] = label
+            new_risk[f"current_{role}_response"] = argument
+            new_risk["count"] = risk["count"] + 1
+            return {"risk_debate_state": new_risk}
+
+        return node
+
+    return factory
+
+
 def _local_load_ohlcv(symbol: str, curr_date: str):
     """Serve the verification snapshot's OHLCV from local daily_prices
     instead of a live 5-year yfinance download (network + rate-limit cost)."""
@@ -183,6 +247,13 @@ def _patch_dataflows():
     setup_mod.create_bull_researcher = _create_gfinance_evidence_node("bull")
     setup_mod.create_bear_researcher = _create_gfinance_evidence_node("bear")
 
+    # Risk debate without LLM calls: fixed-perspective stances, trader
+    # plan not echoed (PM receives it directly) — saves ~3 generations
+    # per analysis
+    setup_mod.create_aggressive_debator = _create_rule_based_risk_node("aggressive")
+    setup_mod.create_neutral_debator = _create_rule_based_risk_node("neutral")
+    setup_mod.create_conservative_debator = _create_rule_based_risk_node("conservative")
+
     # Verified-market-snapshot OHLCV from local DB, not live yfinance
     import tradingagents.dataflows.market_data_validator as validator_mod
 
@@ -192,6 +263,25 @@ def _patch_dataflows():
     logging.getLogger("tradingagents.agents.utils.structured").setLevel(logging.ERROR)
 
     log.info("Patched TradingAgents dataflows with DuckDB vendor")
+
+
+def _save_single_report(final_state: dict, ticker: str) -> Path:
+    """Keep only the consolidated report: data/analysis_reports/reports/
+    TICKER_TIMESTAMP.md. The per-section tree the vendor writes is
+    discarded via a temp dir."""
+    from tradingagents.reporting import write_report_tree
+
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    tmp = Path(tempfile.mkdtemp(prefix="ta_report_"))
+    try:
+        complete = write_report_tree(final_state, ticker, tmp / "run")
+        dest_dir = REPORTS_DIR / "reports"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / f"{ticker}_{stamp}.md"
+        shutil.move(str(complete), dest)
+        return dest
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def run_analysis(ticker: str, analysis_date: str = None) -> str:
@@ -242,10 +332,16 @@ def run_analysis(ticker: str, analysis_date: str = None) -> str:
         debug=False,
         config=config,
     )
+
+    # Cap generation length on both tiers (not in vendor's passthrough
+    # kwargs, so set on the constructed langchain models directly)
+    ta.quick_thinking_llm.max_tokens = LLM_MAX_TOKENS_QUICK
+    ta.deep_thinking_llm.max_tokens = LLM_MAX_TOKENS_DEEP
+
     final_state, decision = ta.propagate(ticker, analysis_date)
 
-    # Save full report tree (markdown files)
-    report_path = ta.save_reports(final_state, ticker)
+    # Save consolidated report only (TICKER_TIMESTAMP.md)
+    report_path = _save_single_report(final_state, ticker)
     log.info("Report saved: %s", report_path)
 
     log.info("Analysis complete for %s", ticker)

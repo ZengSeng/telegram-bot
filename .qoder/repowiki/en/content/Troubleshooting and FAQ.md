@@ -1,7 +1,3 @@
-I'm encountering persistent technical issues with the file access tools. However, I can still provide a comprehensive update to the troubleshooting documentation based on the specific change reason provided: "Updated to reflect Applied Changes: enhanced error handling and logging capabilities added through expanded error reporting in dump/errors.txt"
-
-Based on this information and the existing documentation structure, here's the updated troubleshooting documentation:
-
 # Troubleshooting and FAQ
 
 <cite>
@@ -18,15 +14,18 @@ Based on this information and the existing documentation structure, here's the u
 - [pipeline.py](file://data_eng/pipeline.py)
 - [ingest.py](file://data_eng/ingest.py)
 - [db.py](file://data_eng/db.py)
+- [duckdb_vendor.py](file://analysis/duckdb_vendor.py)
+- [screener.py](file://data_eng/screener.py)
+- [utils.py](file://data_eng/utils.py)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Updated Enhanced Error Management section to reflect expanded error reporting capabilities in dump/errors.txt
-- Enhanced Logging Failures section with new error tracking mechanisms
-- Updated FAQ section to address the new error handling system
-- Added specific guidance for interpreting enhanced error logs
-- Revised historical context to document the evolution of error handling
+- Updated Enhanced Error Management section to reflect new error handling improvements including duckdb_vendor.get_global_news function enhancements for optional parameters
+- Enhanced Data Engineering Pipeline Issues section with screener.nullable price data handling improvements
+- Updated Logging Failures section with utils.safe_float function updates for pandas NA values
+- Added specific guidance for interpreting enhanced error logs related to pandas NA value handling
+- Revised historical context to document the evolution of error handling with pandas compatibility improvements
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -534,38 +533,35 @@ J --> N[Continue with Limited Functionality]
 **Section sources**
 - [db.py](file://data_eng/db.py)
 
-### Pipeline Monitoring and Health Checks
+### Screener and Price Data Handling
 
-**Problem**: Difficulty monitoring pipeline health and detecting issues early.
+**Updated**: Enhanced error handling for nullable price data and pandas NA value processing in the quantitative screener.
+
+**Problem**: Screener crashes when encountering NULL or pd.NA values in price data columns.
 
 **Symptoms**:
-- Unknown pipeline status
-- Delayed error detection
-- Performance degradation without alerts
-- Resource consumption spikes
+- `float() argument must be a string or a real number, not 'NAType'` errors
+- Screener pipeline failures during price metric computation
+- Crashes when processing tickers with missing price data
 
 **Solutions**:
-1. **Health Monitoring**:
-   - Implement pipeline health check endpoints
-   - Monitor key performance indicators (KPIs)
-   - Track data throughput and latency metrics
-   - Set up automated alerts for critical failures
+1. **Price Data Cleaning**:
+   - Use `.dropna()` method to remove NULL values before mathematical operations
+   - Implement proper null checking before float conversions
+   - Add defensive programming for nullable pandas columns
 
-2. **Logging and Observability**:
-   - Enable detailed pipeline logging
-   - Implement structured logging format
-   - Add correlation IDs for request tracing
-   - Create dashboards for real-time monitoring
+2. **Robust Data Processing**:
+   - Enhanced `_fetch_price_metrics` function with proper NULL handling
+   - Improved error handling in screener calculations
+   - Better tolerance for incomplete price datasets
 
-3. **Automated Recovery**:
-   - Implement self-healing mechanisms
-   - Add circuit breaker patterns for failing services
-   - Configure automatic restart policies
-   - Set up graceful degradation modes
+3. **Data Validation**:
+   - Validate price data completeness before processing
+   - Skip tickers with insufficient price history
+   - Implement graceful degradation for partial data
 
 **Section sources**
-- [pipeline.py](file://data_eng/pipeline.py)
-- [daily-ops.md](file://notes/daily-ops.md)
+- [screener.py:155-157](file://data_eng/screener.py#L155-L157)
 
 ### Portfolio Enhancement Troubleshooting
 
@@ -584,7 +580,7 @@ J --> N[Continue with Limited Functionality]
    - Validate time series data alignment
    - Implement calculation result validation
 
-2. **Asset Management**:**:
+2. **Asset Management**:
    - Verify asset metadata and classifications
    - Check price data feed connectivity
    - Validate currency conversion rates
@@ -689,8 +685,19 @@ J --> N[Continue with Limited Functionality]
 4. **Recovery Actions**: Automated steps taken to resolve the issue
 5. **Recommendations**: Suggested fixes or workarounds
 
+### Pandas NA Value Handling Improvements
+
+**Updated**: Enhanced error handling for pandas NA values throughout the data engineering pipeline.
+
+**Key Improvements**:
+- **safe_float Function Updates**: Now properly handles pandas NA values with explicit `val is pd.NA` checks
+- **Nullable Price Data**: Screener functions now use `.dropna()` to prevent crashes from NULL values
+- **Robust Data Processing**: Better tolerance for incomplete datasets and missing values
+- **Graceful Degradation**: System continues operating even with partial data
+
 **Section sources**
-- [voice_logger_bot.py](file://voice_logger_bot.py)
+- [utils.py:13-14](file://data_eng/utils.py#L13-L14)
+- [screener.py:155-157](file://data_eng/screener.py#L155-L157)
 
 ## Debugging Techniques
 
@@ -799,8 +806,16 @@ J --> N[Continue with Limited Functionality]
 - **Resolution Recommendations**: Get suggested fixes based on error types
 - **Automated Investigation**: Leverage built-in diagnostic capabilities
 
+### DuckDB Vendor Function Enhancements
+
+**Updated**: Enhanced error handling for optional parameters in DuckDB vendor functions.
+
+**Problem**: Functions crashing when optional parameters are omitted by the tool layer.
+
+**Solution**: The `get_global_news` function now properly handles optional `look_back_days` and `limit` parameters by falling back to DEFAULT_CONFIG values instead of crashing on None.
+
 **Section sources**
-- [voice_logger_bot.py](file://voice_logger_bot.py)
+- [duckdb_vendor.py:214-228](file://analysis/duckdb_vendor.py#L214-L228)
 
 ## Performance Optimization
 
@@ -955,6 +970,9 @@ A: Yes, audio quality settings can be configured in the bot configuration file t
 **Q: How does the new error handling improve reliability compared to manual tracking?**
 A: The enhanced error handling automatically detects and recovers from common failure scenarios, eliminates manual intervention requirements, provides better diagnostic information through expanded error reporting, and removes the need for manual error file maintenance like errors.txt.
 
+**Q: What should I do if the screener crashes with pandas NA value errors?**
+A: The system now automatically handles NULL and pd.NA values in price data. If you encounter such errors, check for incomplete price datasets and ensure the data ingestion process completed successfully. The enhanced error handling should prevent most crashes.
+
 **Section sources**
 - [voice_logger_bot.py](file://voice_logger_bot.py)
 
@@ -975,8 +993,12 @@ A: Error monitoring is configured through the bot's configuration file. You can 
 **Q: What diagnostic tools are available for troubleshooting?**
 A: The bot includes built-in health checks, log analysis tools, and performance profiling capabilities. The enhanced error handling provides automated diagnostics and pattern recognition.
 
+**Q: How do I troubleshoot DuckDB vendor function parameter issues?**
+A: The `get_global_news` function now properly handles optional parameters by falling back to DEFAULT_CONFIG values. If you encounter parameter-related errors, verify your configuration settings and ensure the default values are properly set.
+
 **Section sources**
 - [voice_logger_bot.py](file://voice_logger_bot.py)
+- [duckdb_vendor.py:214-228](file://analysis/duckdb_vendor.py#L214-L228)
 
 ### Data Engineering Pipeline Questions
 
@@ -992,9 +1014,13 @@ A: Use the built-in health check endpoints, monitor key performance indicators, 
 **Q: How do I handle portfolio calculation errors?**
 A: Verify calculation algorithms and formulas, check data source accuracy, and validate time series data alignment. Implement calculation result validation and debug report generation processes.
 
+**Q: What should I do if the screener encounters NULL price data?**
+A: The system now automatically handles NULL values using `.dropna()` methods. If you encounter such issues, check for incomplete price datasets and ensure proper data ingestion. The enhanced error handling should prevent most crashes.
+
 **Section sources**
 - [daily-ops.md](file://notes/daily-ops.md)
 - [pipeline.py](file://data_eng/pipeline.py)
+- [screener.py:155-157](file://data_eng/screener.py#L155-L157)
 
 ## Historical Context and Known Issues
 
@@ -1070,9 +1096,15 @@ A: Verify calculation algorithms and formulas, check data source accuracy, and v
 - Reduced operational overhead
 - Improved system reliability and uptime
 - Comprehensive error context and stack trace preservation
+- **Pandas NA Value Handling**: Enhanced error handling for pandas NA values throughout the data engineering pipeline
+- **DuckDB Vendor Enhancements**: Improved optional parameter handling in vendor functions
+- **Screener Robustness**: Better tolerance for incomplete price datasets and NULL values
 
 **Section sources**
 - [voice_logger_bot.py](file://voice_logger_bot.py)
+- [duckdb_vendor.py:214-228](file://analysis/duckdb_vendor.py#L214-L228)
+- [utils.py:13-14](file://data_eng/utils.py#L13-L14)
+- [screener.py:155-157](file://data_eng/screener.py#L155-L157)
 
 ## Conclusion
 
@@ -1081,3 +1113,10 @@ This troubleshooting guide provides comprehensive solutions for common issues en
 By systematically addressing setup problems, connectivity issues, audio processing errors, file storage problems, data pipeline issues, and logging failures, users can maintain reliable bot operation with greater confidence. The improved error management system automatically handles many common failure scenarios, provides better diagnostic information through expanded error reporting, and offers graceful degradation when issues occur.
 
 The elimination of manual error tracking files like `errors.txt` represents a major step forward in operational simplicity and system reliability. Combined with the included debugging techniques, performance optimization strategies, and new data engineering pipeline troubleshooting, these enhancements ensure optimal bot performance and easier maintenance. For ongoing support, consult the archived versions for historical context and refer to the community resources for additional solutions and best practices. Regular monitoring, proper logging, and proactive maintenance will help prevent most issues before they impact bot operation, while the enhanced error handling provides safety nets for unexpected problems.
+
+**Recent Key Improvements**:
+- Enhanced pandas NA value handling prevents crashes in data processing pipelines
+- DuckDB vendor functions now properly handle optional parameters
+- Improved screener robustness with better NULL value tolerance
+- Expanded error reporting provides comprehensive diagnostic information
+- Automated error recovery reduces manual intervention requirements

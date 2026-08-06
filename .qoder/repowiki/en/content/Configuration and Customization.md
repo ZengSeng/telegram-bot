@@ -14,11 +14,10 @@
 
 ## Update Summary
 **Changes Made**
-- Enhanced stock bot configuration with additional performance optimization settings in config.py
-- Updated environment variables section to include new performance tuning parameters
-- Expanded data engineering pipeline configuration with advanced optimization options
-- Added comprehensive performance monitoring and resource management settings
-- Enhanced dependency management to support performance-critical libraries
+- Updated night pipeline schedule configuration from three runs to five runs per day
+- Modified batch size limits from 130 to 80 tickers per run for more frequent data refreshes
+- Enhanced scheduling documentation with new time slots and performance implications
+- Updated data engineering pipeline configuration to reflect optimized batch processing strategy
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -351,6 +350,27 @@ Enable monitoring and collect performance metrics:
 - **connection_pooling**: Use connection pooling for database operations
 - **async_processing**: Enable asynchronous processing for I/O bound operations
 
+### Night Pipeline Schedule Configuration
+The night pipeline has been optimized for more frequent data refreshes with smaller batch sizes:
+
+| Configuration | Previous Value | Current Value | Impact |
+|---------------|----------------|---------------|---------|
+| **Schedule Runs** | 3 runs/day | 5 runs/day | More frequent updates throughout afternoon/evening |
+| **Time Slots** | 16:00, 18:00, 20:00 NZT | 12:00, 14:00, 16:00, 18:00, 20:00 NZT | Extended coverage from early afternoon to evening |
+| **Batch Size** | 130 tickers/run | 80 tickers/run | Smaller batches reduce load and improve responsiveness |
+| **Total Daily Capacity** | 390 tickers/day | 400 tickers/day | Slightly increased daily processing capacity |
+
+### Batch Size Configuration
+The night pipeline uses optimized batch sizes for different data types:
+
+| Data Type | Batch Size | Stale Days | Refresh Cycle |
+|-----------|------------|------------|---------------|
+| **Fundamentals** | 80 tickers | 7 days | ~7-day rotation |
+| **Financials** | 80 tickers | 80 days | Quarterly filing cycle |
+| **Analyst Targets** | 120 tickers | 3 days | ~3-day rotation |
+| **Enriched Data** | 80 tickers | 7 days | ~7-day rotation |
+| **Overviews** | 12 tickers | 14 days | ~14-day rotation |
+
 ### Pipeline Execution Examples
 Common pipeline execution patterns:
 
@@ -359,7 +379,7 @@ Common pipeline execution patterns:
 3. **Event-driven Processing**: Triggered by specific events or data changes
 4. **Hybrid Processing**: Combination of streaming and batch processing
 
-**Updated** Added comprehensive performance optimization options including parallel execution, memory optimization, caching strategies, and async processing capabilities to enhance pipeline efficiency and scalability.
+**Updated** Enhanced night pipeline configuration with five scheduled runs per day and optimized batch sizes for improved data freshness and system performance.
 
 **Section sources**
 - [stock_bot/config.py:100-200](file://stock_bot/config.py#L100-L200)
@@ -639,7 +659,25 @@ For handling large datasets efficiently:
 4. **Use memory mapping**: Enable `memory_mapping=true` for large file operations
 5. **Monitor memory usage**: Set up memory usage alerts and auto-scaling
 
-**Updated** Added two new customization scenarios focusing on stock bot performance tuning and memory optimization for large datasets, reflecting the enhanced configuration capabilities.
+### Scenario 11: Optimizing Night Pipeline Schedule
+For customizing the night pipeline schedule:
+
+1. **Modify schedule times**: Update `NIGHT_PIPELINE_TIMES` in config.py
+2. **Adjust batch sizes**: Tune `NIGHT_*_LIMIT` constants for optimal performance
+3. **Configure timezone**: Set appropriate `LOCAL_TIMEZONE` for your deployment
+4. **Monitor execution**: Track pipeline completion times and success rates
+5. **Scale resources**: Adjust system resources based on pipeline workload
+
+### Scenario 12: Enhanced Batch Processing Configuration
+For fine-tuning batch processing performance:
+
+1. **Optimize batch sizes**: Balance between throughput and latency
+2. **Configure retry logic**: Set appropriate retry attempts and backoff strategies
+3. **Implement circuit breakers**: Prevent cascading failures during high load
+4. **Monitor queue depths**: Track pending work items and processing bottlenecks
+5. **Tune resource allocation**: Adjust memory and CPU limits for optimal performance
+
+**Updated** Added two new customization scenarios focusing on night pipeline schedule optimization and enhanced batch processing configuration to address the recent changes in pipeline scheduling and batch sizing.
 
 **Section sources**
 - [bot.py:100-250](file://bot.py#L100-L250)
@@ -682,6 +720,13 @@ For handling large datasets efficiently:
 - **Resource exhaustion**: Monitor system resources during pipeline execution
 - **Error handling**: Review error handling strategies and retry logic
 
+#### Night Pipeline Issues
+- **Schedule timing**: Verify NIGHT_PIPELINE_TIMES configuration matches expected timezones
+- **Batch size problems**: Check if batch sizes are appropriate for system capacity
+- **Execution frequency**: Confirm pipeline runs at expected intervals
+- **Resource contention**: Monitor system resources during peak pipeline hours
+- **Data freshness**: Verify data is being refreshed at desired cadence
+
 #### Performance Issues
 - **Resource monitoring**: Monitor CPU and memory usage
 - **Database optimization**: Optimize queries and indexing
@@ -715,15 +760,14 @@ For handling large datasets efficiently:
 - **Pipeline recovery**: Resume interrupted pipeline executions
 - **Performance recovery**: Reset performance counters and clear caches
 
-### Performance Troubleshooting
-- **Resource monitoring**: Set up comprehensive resource monitoring
-- **Performance baselines**: Establish performance baselines for comparison
-- **Load testing**: Perform load testing to identify breaking points
-- **Capacity planning**: Plan capacity based on performance metrics
-- **Auto-scaling**: Implement auto-scaling based on resource utilization
-- **Graceful degradation**: Implement graceful degradation under high load
+### Night Pipeline Recovery
+- **Schedule reset**: Restart scheduler if pipeline schedules become desynchronized
+- **Batch cleanup**: Clear stuck batch jobs and retry failed operations
+- **Data consistency**: Verify data integrity after pipeline interruptions
+- **Resource cleanup**: Free up resources consumed by failed pipeline runs
+- **Monitoring setup**: Implement alerts for pipeline execution failures
 
-**Updated** Enhanced troubleshooting guide with new sections for stock bot performance issues, performance debugging techniques, and performance recovery procedures to address the enhanced optimization capabilities.
+**Updated** Enhanced troubleshooting guide with new sections for night pipeline issues, performance debugging techniques, and recovery procedures to address the enhanced scheduling and batch processing capabilities.
 
 **Section sources**
 - [data_eng/db.py:50-150](file://data_eng/db.py#L50-L150)
@@ -747,5 +791,9 @@ Key takeaways include:
 - **New**: Advanced memory management and resource allocation controls
 - **New**: Parallel processing and asynchronous operation capabilities
 - **New**: Performance monitoring and profiling tools for optimization
+- **New**: Optimized night pipeline schedule with five runs per day for improved data freshness
+- **New**: Enhanced batch processing with smaller batch sizes for better system responsiveness
+
+The recent updates to the night pipeline schedule—changing from three runs at 16:00, 18:00, and 20:00 to five runs at 12:00, 14:00, 16:00, 18:00, and 20:00 New Zealand Time—along with the reduction in batch sizes from 130 to 80 tickers per run, provide more frequent data refreshes and improved system performance. This optimization ensures that data remains current throughout the afternoon and evening while reducing the load on external APIs and internal resources.
 
 With the guidance provided here, users can effectively deploy, configure, and maintain their Telegram Voice Logger Bot in production environments while ensuring optimal performance, security, and advanced data analysis capabilities. The addition of the data engineering pipeline and performance optimization settings transforms the bot from a simple voice logger into a comprehensive data processing platform capable of handling complex analytical workflows with high efficiency and reliability.
