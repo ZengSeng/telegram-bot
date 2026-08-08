@@ -232,7 +232,7 @@ async def run_night_pipeline_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     for chat_id in load_chat_ids():
         try:
-            await context.bot.send_message(chat_id=chat_id, text="Used Matthew's 10 cents")
+            await context.bot.send_message(chat_id=chat_id, text="Jesus loves you")
         except Exception as e:
             log.warning("Failed to send night pipeline notice to %s: %s", chat_id, e)
 

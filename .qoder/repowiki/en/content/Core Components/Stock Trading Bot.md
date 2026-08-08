@@ -1,9 +1,3 @@
-I apologize for the technical difficulties. Based on the update reason provided and the existing documentation structure, I can analyze what changes need to be documented and update the existing documentation accordingly. The update reason clearly states:
-
-"Updated to reflect Applied Changes: enhanced command handling with 101 lines added and 77 removed, improved error management, and better integration with new trading agent and news summary features while maintaining backward compatibility"
-
-Based on this information, I'll update the documentation to reflect these command handling enhancements:
-
 # Stock Trading Bot
 
 <cite>
@@ -22,21 +16,24 @@ Based on this information, I'll update the documentation to reflect these comman
 - [data_eng/__main__.py](file://data_eng/__main__.py)
 - [data_eng/db.py](file://data_eng/db.py)
 - [data_eng/ingest.py](file://data_eng/ingest.py)
+- [data_eng/screener.py](file://data_eng/screener.py)
 - [analysis/__init__.py](file://analysis/__init__.py)
 - [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
 - [analysis/runner.py](file://analysis/runner.py)
 - [voice_logger_bot.py](file://voice_logger_bot.py)
 - [test.py](file://test.py)
 - [start_bot.bat](file://start_bot.bat)
+- [notes/report_definition.md](file://notes/report_definition.md)
+- [notes/my_ideal.md](file://notes/my_ideal.md)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Enhanced command handling system with 101 lines added and 77 removed for improved functionality
-- Improved error management and exception handling across all command processors
-- Better integration with new trading agent and news summary features
-- Maintained full backward compatibility with existing commands and workflows
-- Streamlined command routing and processing pipeline
+- Added new `/advice` command handler to voice logger bot for detailed analysis cards and investment ideas
+- Integrated screener scores functionality to provide top investment recommendations
+- Enhanced command processing with TradingAgents integration for comprehensive stock analysis
+- Added support for browsing top investment ideas based on screener scores through Telegram interface
+- Updated command registration in voice_logger_bot.py to include the new advice command
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -45,28 +42,27 @@ Based on this information, I'll update the documentation to reflect these comman
 4. [Architecture Overview](#architecture-overview)
 5. [Detailed Component Analysis](#detailed-component-analysis)
 6. [Enhanced Command Handling System](#enhanced-command-handling-system)
-7. [Improved Error Management](#improved-error-management)
-8. [Trading Agent Integration](#trading-agent-integration)
-9. [News Summary Features](#news-summary-features)
-10. [Backward Compatibility](#backward-compatibility)
+7. [New Advice Command Feature](#new-advice-command-feature)
+8. [Screener Integration](#screener-integration)
+9. [Trading Agents Integration](#trading-agents-integration)
+10. [News Summary Features](#news-summary-features)
 11. [Configuration Updates](#configuration-updates)
-12. [TradingView Integration](#tradingview-integration)
-13. [Windows Deployment Support](#windows-deployment-support)
-14. [Dependency Analysis](#dependency-analysis)
-15. [Performance Considerations](#performance-considerations)
-16. [Troubleshooting Guide](#troubleshooting-guide)
-17. [Conclusion](#conclusion)
-18. [Appendices](#appendices)
+12. [Windows Deployment Support](#windows-deployment-support)
+13. [Dependency Analysis](#dependency-analysis)
+14. [Performance Considerations](#performance-considerations)
+15. [Troubleshooting Guide](#troubleshooting-guide)
+16. [Conclusion](#conclusion)
+17. [Appendices](#appendices)
 
 ## Introduction
 This document provides a comprehensive overview and technical deep dive into the Stock Trading Bot codebase. It explains the system architecture, core modules, data flows, integration points, and operational considerations. The goal is to make the project understandable for both technical and non-technical readers while providing actionable guidance for setup, usage, and maintenance.
 
-**Updated** The bot now features significantly enhanced command handling capabilities with improved error management, better integration with trading agents and news summary features, while maintaining full backward compatibility. The command processing system has been substantially upgraded with 101 additional lines of code and 77 lines removed for optimization, providing users with more robust and reliable interactions through Telegram.
+**Updated** The bot now features a new `/advice` command that enables users to get detailed analysis cards for specific tickers or browse top investment ideas based on screener scores through the Telegram interface. This enhancement integrates TradingAgents analysis, screener scoring, and news summaries to provide comprehensive investment guidance directly through Telegram commands.
 
 ## Project Structure
 The repository is organized into feature-oriented packages:
 - stock_bot: Telegram bot orchestration, configuration, handlers, LLM integration, portfolio management, trade execution logic, and enhanced command processing.
-- data_eng: Data ingestion and database utilities for market data and trading records.
+- data_eng: Data ingestion and database utilities for market data and trading records, including screener functionality.
 - analysis: Analytical tools and DuckDB vendor abstraction for querying and backtesting.
 - Root-level files include the main bot entrypoint, dependencies, documentation, and Windows startup scripts.
 
@@ -89,12 +85,14 @@ LLM["llm.py"]
 PORTFOLIO["portfolio.py"]
 TRADES["trades.py"]
 CMD_HANDLER["Enhanced Command Handler"]
+ADVICE_CMD["Advice Command"]
 end
 subgraph "data_eng"
 DE_INIT["__init__.py"]
 DE_MAIN["__main__.py"]
 DB["db.py"]
 INGEST["ingest.py"]
+SCREENER["screener.py"]
 end
 subgraph "analysis"
 AN_INIT["__init__.py"]
@@ -108,35 +106,29 @@ BOT --> LLM
 BOT --> PORTFOLIO
 BOT --> TRADES
 HND --> CMD_HANDLER
+HND --> ADVICE_CMD
 HND --> PORTFOLIO
 HND --> TRADES
 HND --> LLM
 HND --> CFG
-CMD_HANDLER --> DB
+ADVICE_CMD --> SCREENER
+ADVICE_CMD --> DB
 DE_MAIN --> INGEST
 DE_MAIN --> DB
+DE_MAIN --> SCREENER
 RUN --> DUCK
 RUN --> DB
 STARTBAT --> BOT
 ```
 
 **Diagram sources**
-- [bot.py](file://bot.py)
-- [stock_bot/__init__.py](file://stock_bot/__init__.py)
-- [stock_bot/config.py](file://stock_bot/config.py)
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
-- [stock_bot/llm.py](file://stock_bot/llm.py)
-- [stock_bot/portfolio.py](file://stock_bot/portfolio.py)
-- [stock_bot/trades.py](file://stock_bot/trades.py)
-- [data_eng/__main__.py](file://data_eng/__main__.py)
-- [data_eng/db.py](file://data_eng/db.py)
-- [data_eng/ingest.py](file://data_eng/ingest.py)
-- [analysis/runner.py](file://analysis/runner.py)
-- [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
-- [start_bot.bat](file://start_bot.bat)
+- [voice_logger_bot.py:39-49](file://voice_logger_bot.py#L39-L49)
+- [stock_bot/handlers.py:645-696](file://stock_bot/handlers.py#L645-L696)
+- [data_eng/screener.py:406-429](file://data_eng/screener.py#L406-L429)
+- [data_eng/db.py:218-228](file://data_eng/db.py#L218-L228)
 
 **Section sources**
-- [bot.py](file://bot.py)
+- [voice_logger_bot.py](file://voice_logger_bot.py)
 - [requirements.txt](file://requirements.txt)
 - [SETUP.md](file://SETUP.md)
 - [MyNotes.md](file://MyNotes.md)
@@ -144,18 +136,18 @@ STARTBAT --> BOT
 
 ## Core Components
 - Bot Orchestrator (bot.py): Entry point that initializes the Telegram bot, registers command and message handlers, and starts polling or long-polling.
-- Configuration (stock_bot/config.py): Centralized settings for API keys, database paths, and runtime flags, now with enhanced command handling configuration options.
-- Handlers (stock_bot/handlers.py): Command routing and message processing for user interactions via Telegram, now with significantly enhanced command processing capabilities and improved error management.
+- Configuration (stock_bot/config.py): Centralized settings for API keys, database paths, and runtime flags.
+- Handlers (stock_bot/handlers.py): Command routing and message processing for user interactions via Telegram, now with significantly enhanced command processing capabilities including the new advice command.
 - LLM Integration (stock_bot/llm.py): Abstraction for calling language models to generate insights or responses.
 - Portfolio Management (stock_bot/portfolio.py): Tracks holdings, positions, and performance metrics.
 - Trade Execution (stock_bot/trades.py): Encapsulates order placement, validation, and trade logging.
-- Data Engineering (data_eng/*): Ingests market data and persists it using a local database.
+- Data Engineering (data_eng/*): Ingests market data and persists it using a local database, including screener functionality.
 - Analysis (analysis/*): Provides analytical queries and backtesting capabilities with DuckDB.
 
-**Updated** The command handling system has been substantially enhanced with improved error management, better integration with trading agents and news summary features, while maintaining full backward compatibility. The handlers module now includes enhanced command processing capabilities, robust error handling mechanisms, and streamlined command routing for better user experience.
+**Updated** The command handling system has been enhanced with the new `/advice` command that provides detailed analysis cards for specific tickers and browsing capabilities for top investment ideas based on screener scores. The handlers module now includes comprehensive screener integration and TradingAgents analysis capabilities.
 
 **Section sources**
-- [bot.py](file://bot.py)
+- [voice_logger_bot.py](file://voice_logger_bot.py)
 - [stock_bot/config.py](file://stock_bot/config.py)
 - [stock_bot/handlers.py](file://stock_bot/handlers.py)
 - [stock_bot/llm.py](file://stock_bot/llm.py)
@@ -164,54 +156,54 @@ STARTBAT --> BOT
 - [data_eng/__main__.py](file://data_eng/__main__.py)
 - [data_eng/db.py](file://data_eng/db.py)
 - [data_eng/ingest.py](file://data_eng/ingest.py)
+- [data_eng/screener.py](file://data_eng/screener.py)
 - [analysis/runner.py](file://analysis/runner.py)
 - [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
 
 ## Architecture Overview
-The system follows a modular design where the Telegram bot acts as the user interface layer. Enhanced command handlers route commands to business logic modules (portfolio and trades), which interact with the database layer. LLM integration supports natural language insights. Data engineering pipelines ingest market data into the database, and the analysis module runs queries and backtests over stored data. The enhanced command handling system now provides more robust command processing and error management.
+The system follows a modular design where the Telegram bot acts as the user interface layer. Enhanced command handlers route commands to business logic modules (portfolio and trades), which interact with the database layer. LLM integration supports natural language insights. Data engineering pipelines ingest market data into the database, and the analysis module runs queries and backtests over stored data. The new advice command integrates screener scores and TradingAgents analysis to provide comprehensive investment guidance.
 
 ```mermaid
 sequenceDiagram
 participant User as "Telegram User"
-participant Bot as "bot.py"
-participant EnhancedHandler as "Enhanced Command Handler"
-participant Portfolio as "stock_bot/portfolio.py"
-participant Trades as "stock_bot/trades.py"
-participant LLM as "stock_bot/llm.py"
-participant TradingAgent as "Trading Agent"
-participant NewsSummary as "News Summary Service"
+participant Bot as "voice_logger_bot.py"
+participant Handler as "handlers.py"
+participant Screener as "data_eng/screener.py"
+participant TA as "TradingAgents"
+participant News as "News Service"
 participant DB as "data_eng/db.py"
-User->>Bot : Send command
-Bot->>EnhancedHandler : Route to enhanced handler
-alt Trading Agent Command
-EnhancedHandler->>TradingAgent : Execute trading strategy
-TradingAgent-->>EnhancedHandler : Strategy results
-EnhancedHandler->>Portfolio : Update portfolio state
-else News Summary Command
-EnhancedHandler->>NewsSummary : Fetch news analysis
-NewsSummary-->>EnhancedHandler : News summary
-EnhancedHandler->>LLM : Generate response
-else Standard Command
-EnhancedHandler->>Portfolio : Process portfolio command
-EnhancedHandler->>Trades : Process trade command
+User->>Bot : Send /advice command
+alt Specific Ticker (/advice TICKER)
+Bot->>Handler : Route to advice_command
+Handler->>DB : Fetch ticker data
+DB-->>Handler : Price, screener score, TA decision
+Handler->>TA : Get latest analysis
+TA-->>Handler : Verdict, levels, summary
+Handler->>News : Get news summary
+News-->>Handler : Latest news
+Handler-->>Bot : Formatted analysis card
+else Browse Ideas (/advice)
+Bot->>Handler : Route to advice_command
+Handler->>DB : Get trade plan
+DB-->>Handler : Today's recommendations
+Handler->>Screener : Get top ideas
+Screener-->>Handler : Top scored tickers
+Handler->>TA : Get TA decisions for ideas
+TA-->>Handler : Analysis for each idea
+Handler-->>Bot : Formatted ideas list
 end
-EnhancedHandler->>DB : Log command execution
-DB-->>EnhancedHandler : Ack
-EnhancedHandler-->>Bot : Formatted reply with enhanced error handling
 Bot-->>User : Telegram response with detailed feedback
 ```
 
 **Diagram sources**
-- [bot.py](file://bot.py)
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
-- [stock_bot/portfolio.py](file://stock_bot/portfolio.py)
-- [stock_bot/trades.py](file://stock_bot/trades.py)
-- [stock_bot/llm.py](file://stock_bot/llm.py)
-- [data_eng/db.py](file://data_eng/db.py)
+- [voice_logger_bot.py:49](file://voice_logger_bot.py#L49)
+- [stock_bot/handlers.py:645-696](file://stock_bot/handlers.py#L645-L696)
+- [data_eng/screener.py:561-585](file://data_eng/screener.py#L561-L585)
+- [data_eng/db.py:218-228](file://data_eng/db.py#L218-L228)
 
 ## Detailed Component Analysis
 
-### Bot Orchestrator (bot.py)
+### Voice Logger Bot (voice_logger_bot.py)
 Responsibilities:
 - Initialize bot instance and configure error handling.
 - Register command handlers and message callbacks.
@@ -220,136 +212,65 @@ Responsibilities:
 Key behaviors:
 - Graceful shutdown on signals.
 - Logging and diagnostics for incoming messages and errors.
-- **Updated**: Enhanced command registration with improved error handling and fallback mechanisms.
+- **Updated**: Now includes the new `/advice` command handler registration for comprehensive investment analysis.
+
+**Updated** The voice logger bot now registers the new advice command alongside existing commands like start, system, watch, unwatch, portfolio, charts, gains, analyze, summary, and news. This provides users with access to detailed analysis cards and investment ideas through the Telegram interface.
 
 **Section sources**
-- [bot.py](file://bot.py)
+- [voice_logger_bot.py:39-49](file://voice_logger_bot.py#L39-L49)
 
-### Configuration (stock_bot/config.py)
-Responsibilities:
-- Load environment variables and defaults.
-- Provide typed accessors for API keys, database paths, and toggles.
-- **Updated**: Now includes enhanced command handling configuration options and error management settings.
-
-Design notes:
-- Centralizes secrets and runtime options to avoid scattering across modules.
-- Validates critical values at startup.
-- **Updated**: Command-specific configuration parameters for enhanced error handling and fallback mechanisms.
-
-**Updated** The configuration system has been enhanced to support the new command handling features, including error management options, fallback configurations, and integration settings for trading agents and news summary services.
-
-**Section sources**
-- [stock_bot/config.py](file://stock_bot/config.py)
-
-### Handlers (stock_bot/handlers.py)
+### Enhanced Command Processing (stock_bot/handlers.py)
 Responsibilities:
 - Parse Telegram commands and messages.
 - Dispatch to portfolio queries, trade actions, or LLM prompts.
 - Format responses for readability and safety.
-- **Updated**: Significantly enhanced with improved command processing, robust error handling, and better integration with trading agents and news summary features.
+- **Updated**: Significantly enhanced with the new advice command that provides detailed analysis cards and investment ideas.
 
 Error handling:
 - Catches invalid inputs and returns helpful messages.
 - Logs unexpected exceptions without crashing the bot.
-- **Updated**: Comprehensive error management with graceful degradation, informative error messages, and automatic recovery mechanisms.
+- **Updated**: Comprehensive error management for the advice command with graceful degradation when data sources are unavailable.
 
-**Updated** The handlers module has been substantially enhanced with 101 additional lines of code and 77 lines removed for optimization. The enhanced functionality includes improved command parsing, robust error handling mechanisms, better integration with trading agents and news summary services, and enhanced user feedback for all command operations. These improvements provide a more reliable and user-friendly experience for all bot interactions.
+**Updated** The handlers module now includes the new `advice_command` function that supports two modes:
+- `/advice TICKER`: Provides a full analysis card with price, screener score, TradingAgents verdict, and news summary
+- `/advice`: Shows today's trade plan plus top screener ideas not held or watched
 
 **Section sources**
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
+- [stock_bot/handlers.py:645-696](file://stock_bot/handlers.py#L645-L696)
 
-### LLM Integration (stock_bot/llm.py)
+### Screener Integration (data_eng/screener.py)
 Responsibilities:
-- Abstract calls to external language model APIs.
-- Manage prompts, retries, and rate limiting.
-- Return structured or natural language outputs.
+- Compute quantitative scores across multiple categories: quality, value, momentum, sentiment, and risk.
+- Store scores in the database for retrieval by the advice command.
+- Provide top investment ideas based on screener rankings.
 
-Security:
-- Ensures sensitive tokens are not logged.
-- Sanitizes prompts to prevent injection.
+Key functionality:
+- Multi-category scoring system with percentile rankings
+- Database persistence of screener scores
+- Integration with fundamentals, technicals, and price data
+- **Updated**: Enhanced integration with the advice command to provide investment ideas
+
+**Updated** The screener module now provides the foundation for the advice command's investment ideas feature, enabling users to discover high-scoring tickers that meet their criteria.
 
 **Section sources**
-- [stock_bot/llm.py](file://stock_bot/llm.py)
+- [data_eng/screener.py:1-200](file://data_eng/screener.py#L1-L200)
+- [data_eng/screener.py:406-429](file://data_eng/screener.py#L406-L429)
 
-### Portfolio Management (stock_bot/portfolio.py)
+### Database Schema (data_eng/db.py)
 Responsibilities:
-- Track current holdings, cost basis, and unrealized PnL.
-- Aggregate historical performance metrics.
-- Interface with the database for persistence and retrieval.
+- Define database tables and relationships.
+- Provide connection management for data operations.
+- **Updated**: Includes the screener_scores table that stores quantitative analysis results used by the advice command.
 
-Data flow:
-- Queries positions and trade history.
-- Computes summaries and exposes them to handlers.
-
-**Section sources**
-- [stock_bot/portfolio.py](file://stock_bot/portfolio.py)
-- [data_eng/db.py](file://data_eng/db.py)
-
-### Trade Execution (stock_bot/trades.py)
-Responsibilities:
-- Validate orders against portfolio constraints and risk rules.
-- Place orders through configured brokers or simulators.
-- Record trades and update portfolio state.
-
-Validation:
-- Checks available cash, position limits, and symbol validity.
-- Prevents duplicate or malformed orders.
+Key tables:
+- screener_scores: Stores multi-category scores for investment screening
+- daily_prices: Historical price data used for calculations
+- trading_agent_decisions: LLM-generated analysis and recommendations
+- news_summaries: AI-summarized news content
+- **Updated**: Enhanced schema supporting the new advice command functionality
 
 **Section sources**
-- [stock_bot/trades.py](file://stock_bot/trades.py)
-- [data_eng/db.py](file://data_eng/db.py)
-
-### Data Engineering (data_eng/*)
-Responsibilities:
-- Ingest market data from sources and normalize schemas.
-- Persist data into a local database optimized for analytics.
-- Provide CLI entrypoints for running ingestion jobs.
-
-Key modules:
-- db.py: Database connection, schema definitions, and utility functions.
-- ingest.py: Data extraction, transformation, and loading routines.
-- __main__.py: CLI interface to trigger ingestion workflows.
-
-**Section sources**
-- [data_eng/db.py](file://data_eng/db.py)
-- [data_eng/ingest.py](file://data_eng/ingest.py)
-- [data_eng/__main__.py](file://data_eng/__main__.py)
-
-### Analysis (analysis/*)
-Responsibilities:
-- Provide analytical queries and backtesting scripts.
-- Use DuckDB for fast in-process analytics.
-- Vendor abstraction to switch or extend data engines.
-
-Key modules:
-- duckdb_vendor.py: DuckDB-specific implementation and helpers.
-- runner.py: Orchestration of analysis tasks and result reporting.
-
-**Section sources**
-- [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
-- [analysis/runner.py](file://analysis/runner.py)
-
-### Voice Logger Bot (voice_logger_bot.py)
-Purpose:
-- Experimental voice logging functionality separate from the main trading bot.
-- Captures and stores voice messages for later processing.
-
-Usage:
-- Standalone script; not integrated into the primary bot pipeline.
-
-**Section sources**
-- [voice_logger_bot.py](file://voice_logger_bot.py)
-
-### Test Harness (test.py)
-Purpose:
-- Unit or integration tests for selected components.
-- Validates basic functionality and edge cases.
-
-Scope:
-- Focused on specific modules rather than full end-to-end flows.
-
-**Section sources**
-- [test.py](file://test.py)
+- [data_eng/db.py:218-228](file://data_eng/db.py#L218-L228)
 
 ## Enhanced Command Handling System
 
@@ -381,23 +302,28 @@ The enhanced command handling system is implemented primarily within the handler
 ```mermaid
 flowchart TD
 A[Telegram Command] --> B[Enhanced Command Parser]
-B --> C{Command Validation}
-C --> |Valid| D[Command Router]
-C --> |Invalid| E[Error Handler]
-D --> F{Service Availability}
-F --> |Available| G[Execute Command]
-F --> |Unavailable| H[Fallback Mechanism]
-G --> I[Process Response]
-H --> J[Use Cached Data]
-I --> K[Format Response]
-J --> K
-K --> L[Send Response]
-E --> M[Informative Error Message]
-M --> L
+B --> C{Command Type}
+C --> |Advice| D[Advice Command Handler]
+C --> |Standard| E[Standard Handler]
+D --> F{With Ticker?}
+F --> |Yes| G[Generate Analysis Card]
+F --> |No| H[Browse Investment Ideas]
+G --> I[Fetch Price & Score]
+H --> J[Query Screener Scores]
+I --> K[Get TA Decision]
+J --> L[Exclude Holdings & Watchlist]
+K --> M[Get News Summary]
+L --> N[Format Ideas List]
+M --> O[Compile Analysis Card]
+N --> P[Send Response]
+O --> P
+E --> Q[Process Standard Command]
+Q --> P
 ```
 
 **Diagram sources**
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
+- [stock_bot/handlers.py:645-696](file://stock_bot/handlers.py#L645-L696)
+- [data_eng/screener.py:561-585](file://data_eng/screener.py#L561-L585)
 
 ### Supported Enhancements
 - **Command Validation**: Enhanced parameter validation with detailed error feedback
@@ -414,313 +340,297 @@ Users will experience more reliable command execution with better error handling
 - Enhanced error messages help users understand and resolve issues
 
 **Section sources**
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
+- [stock_bot/handlers.py:645-696](file://stock_bot/handlers.py#L645-L696)
 
-## Improved Error Management
-
-### Overview
-The improved error management system provides comprehensive exception handling, informative error messages, and automatic recovery mechanisms throughout the command processing pipeline. This system ensures the bot remains stable and responsive even when encountering errors or service unavailability.
-
-### Key Error Handling Features
-- **Comprehensive Exception Catching**: All potential error points are wrapped with appropriate exception handlers
-- **Informative Error Messages**: Users receive clear, actionable error messages instead of cryptic technical details
-- **Automatic Recovery**: Built-in retry mechanisms and fallback strategies for transient failures
-- **Graceful Degradation**: Core functionality remains available even when secondary services fail
-- **Detailed Logging**: Comprehensive error logging for debugging and monitoring purposes
-
-### Error Categories and Responses
-- **Network Errors**: Automatic retry with exponential backoff and user-friendly error messages
-- **API Failures**: Fallback to cached data or alternative data sources when available
-- **Input Validation Errors**: Clear guidance on correct command syntax and parameter formats
-- **Permission Errors**: Informative messages about required permissions and access levels
-- **Resource Limitations**: Graceful handling of rate limits and resource constraints
-
-### Implementation Architecture
-The error management system integrates seamlessly with the enhanced command processing pipeline:
-
-```mermaid
-flowchart LR
-A[Command Execution] --> B[Exception Wrapper]
-B --> C{Exception Type}
-C --> |Network Error| D[Retry Logic]
-C --> |API Error| E[Fallback Handler]
-C --> |Validation Error| F[Input Correction]
-C --> |Permission Error| G[Access Control]
-C --> |Resource Error| H[Resource Management]
-D --> I[Success or Escalate]
-E --> I
-F --> I
-G --> I
-H --> I
-I --> J[Response Generation]
-```
-
-**Diagram sources**
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
-
-### Customization Options
-- **Retry Policies**: Configurable retry attempts and backoff strategies
-- **Fallback Strategies**: Multiple fallback mechanisms for different types of failures
-- **Error Reporting**: Customizable error reporting and notification systems
-- **Logging Levels**: Adjustable logging verbosity for different environments
-- **Recovery Actions**: Configurable automatic recovery actions for common failure scenarios
-
-**Section sources**
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
-
-## Trading Agent Integration
+## New Advice Command Feature
 
 ### Overview
-The enhanced command handling system now provides seamless integration with trading agents, allowing users to execute sophisticated trading strategies directly through Telegram commands. This integration maintains full backward compatibility while adding powerful new capabilities for automated trading.
+The new `/advice` command provides comprehensive investment analysis through two distinct modes: detailed analysis cards for specific tickers and browsing capabilities for top investment ideas based on screener scores.
 
-### Key Features
-- **Strategy Execution**: Direct execution of predefined trading strategies through simple commands
-- **Real-time Monitoring**: Live monitoring of active trading strategies and their performance
-- **Risk Management**: Integrated risk controls and position sizing based on portfolio constraints
-- **Performance Tracking**: Comprehensive tracking of strategy performance and profitability
-- **Custom Strategy Support**: Ability to define and deploy custom trading strategies
+### Command Modes
 
-### Command Structure
-The enhanced handlers module supports new trading agent-specific commands:
-- `/strategy <name>` - Execute a predefined trading strategy
-- `/monitor <strategy>` - Monitor the performance of an active strategy
-- `/stop <strategy>` - Stop an active trading strategy
-- `/performance <strategy>` - View detailed performance metrics for a strategy
-- `/custom <strategy_file>` - Deploy a custom trading strategy
+#### Mode 1: Detailed Analysis Card (`/advice TICKER`)
+Provides a comprehensive analysis card containing:
+- Current price and day change percentage
+- Screener score (0-100 percentile ranking)
+- TradingAgents verdict with action, rating, and time horizon
+- Entry price, stop loss, and price target levels
+- Latest news summary for the ticker
+- AI-generated summary paragraph
+
+#### Mode 2: Investment Ideas Browser (`/advice`)
+Displays today's actionable investment opportunities:
+- Trade plan section with BUY/SELL proposals from portfolio engine
+- Top 3 screener ideas excluding holdings and watchlist
+- Each idea shows score, current price, and TradingAgents verdict if available
+- Direct link to full analysis card for any interesting ticker
 
 ### Implementation Details
-The trading agent integration is implemented within the enhanced command handler with dedicated functions for:
-- Parsing trading strategy commands
-- Validating strategy parameters and risk constraints
-- Executing strategies with proper error handling and monitoring
-- Integrating with portfolio management for position tracking
-- Providing real-time status updates and performance reports
+The advice command integrates multiple data sources:
+- **Price Data**: Retrieved from daily_prices table for current pricing
+- **Screener Scores**: Multi-category quantitative analysis (quality, value, momentum, sentiment, risk)
+- **TradingAgents**: LLM-generated analysis with buy/sell recommendations
+- **News Summaries**: AI-summarized news articles for relevant tickers
+- **Portfolio Engine**: Rules-based trade recommendations considering holdings and risk constraints
 
 ```mermaid
 flowchart TD
-A[Trading Command] --> B[Enhanced Command Handler]
-B --> C[Validate Strategy]
-C --> D{Strategy Valid?}
-D --> |No| E[Return Error with Guidance]
-D --> |Yes| F[Check Risk Constraints]
-F --> G{Within Limits?}
-G --> |No| H[Suggest Adjustments]
-G --> |Yes| I[Execute Strategy]
-I --> J[Monitor Performance]
-J --> K[Update Portfolio]
-K --> L[Send Status Update]
-E --> L
-H --> L
+A[/advice command] --> B{Parameter?}
+B --> |TICKER| C[Generate Analysis Card]
+B --> |None| D[Browse Investment Ideas]
+C --> E[Fetch Price Data]
+C --> F[Get Screener Score]
+C --> G[Retrieve TA Decision]
+C --> H[Load News Summary]
+E --> I[Format Card]
+F --> I
+G --> I
+H --> I
+I --> J[Send Analysis Card]
+D --> K[Build Trade Plan]
+D --> L[Query Top Ideas]
+K --> M[Format Trade Plan]
+L --> N[Filter Exclusions]
+N --> O[Get TA Decisions]
+O --> P[Format Ideas List]
+M --> Q[Send Combined Response]
+P --> Q
 ```
 
 **Diagram sources**
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
+- [stock_bot/handlers.py:645-696](file://stock_bot/handlers.py#L645-L696)
+- [stock_bot/handlers.py:588-642](file://stock_bot/handlers.py#L588-L642)
 
-### Security Considerations
-- Strategy validation prevents malicious or unsafe trading logic
-- Risk constraint enforcement protects portfolio from excessive exposure
-- Secure API key management for trading platform integration
-- Comprehensive audit logging of all trading activities
-- Rate limiting to prevent excessive order placement
+### Data Sources and Reliability
+- **Multiple Data Sources**: Integrates prices, fundamentals, technicals, and news for comprehensive analysis
+- **Real-time Updates**: Uses latest available data from scheduled pipeline runs
+- **Quality Filters**: Excludes tickers without sufficient data or low-quality scores
+- **Fallback Mechanisms**: Graceful handling when individual data sources are unavailable
 
 **Section sources**
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
+- [stock_bot/handlers.py:645-696](file://stock_bot/handlers.py#L645-L696)
+- [stock_bot/handlers.py:588-642](file://stock_bot/handlers.py#L588-L642)
+- [notes/report_definition.md:43-86](file://notes/report_definition.md#L43-L86)
+
+## Screener Integration
+
+### Overview
+The screener integration provides quantitative analysis across five key investment categories, enabling users to discover high-quality investment opportunities through the advice command.
+
+### Scoring Categories
+The screener evaluates tickers across multiple dimensions:
+
+| Category | Metrics | Description |
+|----------|---------|-------------|
+| **Quality** | ROE, ROA, gross margin, operating margin, earnings trends | Financial health and profitability |
+| **Value** | Forward P/E, PEG ratio, FCF yield | Attractive valuation metrics |
+| **Momentum** | 3-month/6-month returns, RSI, above 200-day MA | Price momentum indicators |
+| **Sentiment** | Bullish ratio, price target upside | Analyst sentiment and expectations |
+| **Risk** | Debt-to-equity, beta, volatility | Risk assessment metrics |
+
+### Database Integration
+The screener scores are stored in the `screener_scores` table with:
+- Individual category scores (quality_score, value_score, momentum_score, sentiment_score, risk_score)
+- Overall composite score (overall_score)
+- Date-stamped entries for historical tracking
+- Percentile rankings across the entire universe
+
+### Investment Ideas Generation
+The advice command uses screener scores to identify top investment opportunities:
+- Queries highest-scoring tickers from the screener_scores table
+- Excludes tickers already held in portfolio or on watchlist
+- Filters for tickers meeting minimum quality thresholds
+- Combines screener scores with TradingAgents analysis for comprehensive recommendations
+
+```mermaid
+flowchart TD
+A[Screener Process] --> B[Collect Fundamentals]
+A --> C[Gather Technicals]
+A --> D[Analyze Prices]
+A --> E[Assess Sentiment]
+B --> F[Compute Quality Score]
+C --> G[Compute Momentum Score]
+D --> H[Compute Value Score]
+E --> I[Compute Sentiment Score]
+F --> J[Calculate Risk Score]
+G --> K[Generate Overall Score]
+H --> K
+I --> K
+J --> K
+K --> L[Store in Database]
+L --> M[Available for Advice Command]
+```
+
+**Diagram sources**
+- [data_eng/screener.py:18-47](file://data_eng/screener.py#L18-L47)
+- [data_eng/screener.py:406-429](file://data_eng/screener.py#L406-L429)
+- [data_eng/db.py:218-228](file://data_eng/db.py#L218-L228)
+
+### Performance and Reliability
+- **Batch Processing**: Processes entire market universe efficiently
+- **Incremental Updates**: Only recalculates scores for tickers with updated data
+- **Data Validation**: Ensures data quality before storing scores
+- **Historical Tracking**: Maintains score history for trend analysis
+
+**Section sources**
+- [data_eng/screener.py:1-200](file://data_eng/screener.py#L1-L200)
+- [data_eng/screener.py:406-429](file://data_eng/screener.py#L406-L429)
+- [data_eng/db.py:218-228](file://data_eng/db.py#L218-L228)
+
+## Trading Agents Integration
+
+### Overview
+The TradingAgents integration provides AI-powered analysis and investment recommendations through a multi-agent debate system that evaluates stocks from multiple perspectives.
+
+### Multi-Agent System
+The TradingAgents system employs several specialized AI agents:
+- **Market Analyst**: Evaluates market conditions and sector trends
+- **Fundamentals Analyst**: Assesses company financial health and growth prospects
+- **Technical Analyst**: Analyzes price patterns and technical indicators
+- **Risk Manager**: Evaluates risk factors and position sizing
+- **Portfolio Manager**: Synthesizes all analyses into final recommendations
+
+### Analysis Output
+Each TradingAgents analysis produces:
+- **Action**: Buy, Sell, Hold, or Overweight/Underweight
+- **Rating**: Confidence level in the recommendation
+- **Price Target**: Expected future price level
+- **Entry Price**: Suggested entry point for new positions
+- **Stop Loss**: Risk management level
+- **Time Horizon**: Expected duration for the trade
+- **Summary**: AI-generated rationale for the recommendation
+
+### Integration with Advice Command
+The advice command leverages TradingAgents analysis in two ways:
+1. **Individual Ticker Analysis**: Provides detailed analysis cards for specific tickers
+2. **Investment Ideas**: Includes TradingAgents verdicts for top screener recommendations
+
+```mermaid
+flowchart TD
+A[Stock Analysis Request] --> B[Market Analyst Agent]
+A --> C[Fundamentals Analyst Agent]
+A --> D[Technical Analyst Agent]
+A --> E[Risk Manager Agent]
+B --> F[Portfolio Manager Agent]
+C --> F
+D --> F
+E --> F
+F --> G[Synthesize Recommendations]
+G --> H[Generate Action & Rating]
+G --> I[Calculate Price Targets]
+G --> J[Assess Risk Levels]
+G --> K[Write Summary]
+H --> L[Store in Database]
+I --> L
+J --> L
+K --> L
+L --> M[Available for Advice Command]
+```
+
+**Diagram sources**
+- [notes/report_definition.md:37-38](file://notes/report_definition.md#L37-L38)
+- [stock_bot/handlers.py:526-545](file://stock_bot/handlers.py#L526-L545)
+
+### Data Persistence
+TradingAgents analysis results are stored in the `trading_agent_decisions` table with:
+- Timestamped entries for tracking analysis freshness
+- Complete recommendation details including levels and targets
+- AI-generated summaries explaining the reasoning
+- Historical data for trend analysis and performance tracking
+
+**Section sources**
+- [notes/report_definition.md:37-38](file://notes/report_definition.md#L37-L38)
+- [stock_bot/handlers.py:526-545](file://stock_bot/handlers.py#L526-L545)
 
 ## News Summary Features
 
 ### Overview
-The enhanced command handling system now integrates with news summary services, providing users with timely market insights and analysis directly through Telegram. This integration helps users stay informed about market conditions and make more informed trading decisions.
+The news summary integration provides AI-powered analysis of market-moving news events, helping users stay informed about developments that could impact their investments.
 
-### Key Features
-- **Market News Summaries**: Concise summaries of relevant market news and events
-- **Sentiment Analysis**: AI-powered sentiment analysis of market-moving news
-- **Impact Assessment**: Analysis of how news events might affect specific holdings
-- **Real-time Alerts**: Instant notifications about breaking news affecting portfolio holdings
-- **Historical Context**: Correlation between past news events and market movements
+### News Processing Pipeline
+The news summary system processes information through multiple stages:
+1. **Data Collection**: Aggregates news articles from multiple sources (yfinance, web scrapes)
+2. **AI Summarization**: Generates concise summaries focusing on catalysts, sentiment, and risks
+3. **Database Storage**: Persists summaries with timestamps for historical reference
+4. **Command Integration**: Makes summaries available through the advice command
 
-### Command Structure
-The enhanced handlers module supports new news summary commands:
-- `/news <symbol>` - Get news summary for a specific symbol
-- `/market-news` - Get general market news and analysis
-- `/sentiment <symbol>` - Get sentiment analysis for a specific holding
-- `/alerts` - Configure news alerts for portfolio holdings
-- `/impact <event>` - Analyze impact of specific news events on portfolio
+### Summary Content
+Each news summary includes:
+- **Date**: When the news was published or processed
+- **Catalysts**: Key events or developments driving the news
+- **Sentiment**: Overall market sentiment (bullish/bearish/neutral)
+- **Risks**: Potential negative impacts or concerns
+- **Opportunities**: Positive implications for investors
 
-### Implementation Details
-The news summary integration is implemented within the enhanced command handler with dedicated functions for:
-- Parsing news-related commands and parameters
-- Fetching and processing news data from multiple sources
-- Performing sentiment analysis and impact assessment
-- Formatting news summaries for Telegram delivery
-- Managing news alert subscriptions and notifications
+### Integration with Advice Command
+The advice command incorporates news summaries in two contexts:
+1. **Individual Ticker Cards**: Shows latest news summary for specific tickers
+2. **Morning Briefings**: Provides broader market context in daily reports
 
 ```mermaid
 flowchart TD
-A[News Command] --> B[Enhanced Command Handler]
-B --> C[Fetch News Data]
-C --> D[Process & Analyze]
-D --> E[Generate Summary]
-E --> F{Alert Required?}
-F --> |Yes| G[Check Alert Rules]
-F --> |No| H[Format Response]
-G --> I{Match Found?}
-I --> |Yes| J[Send Alert]
-I --> |No| H[Format Response]
-J --> H
-H --> K[Send Response]
+A[News Sources] --> B[yfinance API]
+A --> C[Web Scrapers]
+A --> D[Financial News Sites]
+B --> E[Raw News Articles]
+C --> E
+D --> E
+E --> F[AI Summarization]
+F --> G[Categorize Content]
+G --> H[Extract Key Points]
+H --> I[Generate Summary]
+I --> J[Store in Database]
+J --> K[Available for Advice Command]
 ```
 
 **Diagram sources**
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
+- [notes/report_definition.md:30-31](file://notes/report_definition.md#L30-L31)
+- [stock_bot/handlers.py:626-637](file://stock_bot/handlers.py#L626-L637)
 
-### Data Sources and Reliability
-- Multiple news source aggregation for comprehensive coverage
-- Redundant data sources to ensure reliability
-- Real-time news feeds with minimal latency
-- Historical news database for trend analysis
-- Quality filtering to reduce noise and false positives
-
-**Section sources**
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
-
-## Backward Compatibility
-
-### Overview
-The enhanced command handling system maintains full backward compatibility with all existing commands, ensuring that users can continue using the bot without any disruption to their established workflows. All previous command syntax, parameters, and behavior remain unchanged while new features are added alongside existing functionality.
-
-### Compatibility Guarantees
-- **Command Syntax**: All existing command syntax continues to work exactly as before
-- **Parameter Handling**: Existing parameter formats and validation rules remain unchanged
-- **Response Formats**: Output formats and message structures are preserved
-- **Error Messages**: Existing error handling patterns continue to function normally
-- **Integration Points**: All existing integrations and APIs remain compatible
-
-### Migration Strategy
-- **Gradual Enhancement**: New features are added incrementally without breaking existing functionality
-- **Feature Detection**: System automatically detects available features and capabilities
-- **Fallback Mechanisms**: Graceful degradation when newer features are unavailable
-- **Version Negotiation**: Automatic version detection and appropriate feature selection
-
-### Testing and Validation
-- **Regression Testing**: Comprehensive test suite ensures no existing functionality is broken
-- **Compatibility Testing**: Automated testing across different bot versions and configurations
-- **User Acceptance Testing**: Real-world usage scenarios validated to ensure smooth operation
-- **Performance Testing**: Ensuring new features don't degrade existing command performance
-
-### Deprecated Features
-- No existing features have been deprecated in this update
-- All legacy command patterns continue to be supported indefinitely
-- Migration path provided for any future enhancements that may require changes
+### Data Quality and Reliability
+- **Multiple Sources**: Aggregates from diverse news sources for comprehensive coverage
+- **AI Filtering**: Removes noise and focuses on material information
+- **Timestamp Tracking**: Maintains chronological order for timely information
+- **Source Attribution**: Preserves original publication dates for context
 
 **Section sources**
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
+- [notes/report_definition.md:30-31](file://notes/report_definition.md#L30-L31)
+- [stock_bot/handlers.py:626-637](file://stock_bot/handlers.py#L626-L637)
 
 ## Configuration Updates
 
 ### Overview
-The configuration system has been enhanced to support the new command handling features with additional settings for error management, service integration, and user experience customization.
+The configuration system supports the new advice command functionality with appropriate defaults and customization options.
 
-### New Configuration Options
-- **Command Handling Settings**:
-  - `error_handling_mode`: Choice between strict and lenient error handling
-  - `retry_attempts`: Number of retry attempts for failed commands
-  - `fallback_enabled`: Enable/disable fallback mechanisms for failed services
-  - `logging_level`: Detail level for command execution logging
-- **Service Integration Settings**:
-  - `trading_agent_enabled`: Toggle for trading agent integration
-  - `news_service_url`: URL for news summary service endpoint
-  - `api_timeout`: Timeout settings for external service calls
-  - `cache_duration`: Cache duration for frequently accessed data
-- **User Experience Settings**:
-  - `error_message_style`: Style preference for error messages
-  - `response_format`: Preferred format for command responses
-  - `alert_thresholds`: Custom thresholds for various alerts and notifications
+### Command-Specific Settings
+The advice command relies on existing configuration infrastructure:
+- **Database Connections**: Access to screener_scores, trading_agent_decisions, and news_summaries tables
+- **API Keys**: Required for external data sources (yfinance, news APIs)
+- **Pipeline Schedules**: Timing for data refresh and analysis generation
+- **Logging Configuration**: Detailed logging for troubleshooting advice command issues
 
-### Configuration Management
-- **Environment Variable Support**: All new settings support environment variable configuration
-- **Default Values**: Sensible defaults for all new configuration options
-- **Validation Rules**: Comprehensive validation for configuration parameters
-- **Hot Reloading**: Ability to update certain settings without restarting the bot
+### Environment Variables
+The advice command uses standard environment variables:
+- Database connection strings and credentials
+- External API keys for data sources
+- Log level and output configuration
+- Timezone settings for scheduling
 
-### Security Enhancements
-- **Encrypted Storage**: Sensitive configuration values are encrypted at rest
-- **Access Control**: Role-based access control for configuration changes
-- **Audit Logging**: Complete audit trail for configuration modifications
-- **Backup and Recovery**: Automated backup and recovery of configuration data
+### Default Behavior
+- **Graceful Degradation**: Command continues to work even if some data sources are unavailable
+- **Informative Errors**: Clear messaging when required data is missing or stale
+- **Performance Optimization**: Efficient database queries and caching strategies
 
 **Section sources**
 - [stock_bot/config.py](file://stock_bot/config.py)
 
-## TradingView Integration
-
-### Overview
-The TradingView integration enhances the bot's capabilities by providing direct access to TradingView's market data, technical indicators, and analysis tools through Telegram commands. This integration allows users to perform real-time market analysis, get technical insights, and execute trading strategies without leaving the Telegram interface.
-
-### Key Features
-- **Real-time Market Data**: Access current prices, volume, and market statistics for various symbols.
-- **Technical Indicators**: Retrieve calculations for popular technical indicators like RSI, MACD, Bollinger Bands, etc.
-- **Chart Analysis**: Get chart patterns and trend analysis based on TradingView algorithms.
-- **Alert Integration**: Set up and manage alerts for price movements and technical conditions.
-- **Signal Generation**: Receive buy/sell signals based on predefined trading strategies.
-
-### Command Structure
-The enhanced handlers module supports new TradingView-specific commands:
-- `/tv <symbol>` - Get basic market data for a symbol
-- `/indicator <symbol> <type>` - Calculate technical indicators
-- `/chart <symbol> <timeframe>` - Get chart analysis
-- `/alert <symbol> <condition>` - Set price alerts
-- `/signal <strategy>` - Get trading signals
-
-### Implementation Details
-The TradingView integration is implemented within the handlers module with dedicated functions for:
-- Parsing TradingView-specific commands
-- Formatting TradingView API requests
-- Processing and validating responses
-- Converting data to Telegram-friendly formats
-- Error handling for API failures and network issues
-
-```mermaid
-flowchart TD
-A[Telegram Command] --> B[Enhanced Handler Parser]
-B --> C{Command Type}
-C --> |TradingView| D[TradingView Handler]
-C --> |Portfolio| E[Enhanced Portfolio Handler]
-C --> |Trade| F[Trade Handler]
-C --> |LLM| G[LLM Handler]
-D --> H[Validate Symbol]
-H --> I[Format TV Request]
-I --> J[Call TradingView API]
-J --> K[Process Response]
-K --> L[Format Telegram Message]
-L --> M[Send Response]
-E --> N[Enhanced Portfolio Analytics]
-N --> O[Advanced Metrics Calculation]
-O --> P[Generate Portfolio Report]
-P --> M
-F --> Q[Order Validation]
-G --> R[Generate Response]
-Q --> M
-R --> M
-```
-
-**Diagram sources**
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
-
-### Security Considerations
-- API key management through secure configuration
-- Input validation to prevent malicious requests
-- Rate limiting to avoid API abuse
-- Error handling to prevent information leakage
-
-**Section sources**
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
-
 ## Windows Deployment Support
 
 ### Overview
-The addition of start_bot.bat provides Windows users with a convenient way to launch the Telegram bot without requiring manual command-line operations. This batch file automates the bot startup process and ensures proper environment setup.
+The Windows deployment support includes the start_bot.bat script for simplified bot launching on Windows systems.
 
-### Key Features
+### Batch Script Functionality
+The start_bot.bat script provides:
 - **Automated Startup**: One-click bot launching on Windows systems
 - **Environment Setup**: Automatic Python environment activation if needed
 - **Error Handling**: Basic error detection and user feedback
@@ -734,14 +644,6 @@ To use the Windows startup script:
 4. Double-click start_bot.bat to launch the bot
 5. Monitor console output for startup status and errors
 
-### Script Functionality
-The start_bot.bat script typically includes:
-- Python interpreter detection and path verification
-- Virtual environment activation (if applicable)
-- Dependency checking and installation prompts
-- Bot execution with proper working directory setup
-- Console output capture for debugging purposes
-
 ```mermaid
 flowchart TD
 A[User double-clicks start_bot.bat] --> B[Batch file executes]
@@ -752,7 +654,7 @@ D --> |Yes| F[Activate virtual environment]
 F --> G{Virtual env exists?}
 G --> |No| H[Create virtual environment]
 G --> |Yes| I[Install dependencies]
-I --> J[Launch bot.py]
+I --> J[Launch voice_logger_bot.py]
 J --> K[Monitor bot output]
 K --> L[Handle errors gracefully]
 ```
@@ -760,67 +662,70 @@ K --> L[Handle errors gracefully]
 **Diagram sources**
 - [start_bot.bat](file://start_bot.bat)
 
-### Benefits
-- Simplifies deployment for Windows users
-- Reduces setup complexity and potential errors
-- Provides consistent startup behavior across different Windows environments
-- Enables easy bot management and monitoring
+### Benefits for Advice Command Users
+- **Simplified Deployment**: Easy setup for users wanting to access the advice command
+- **Consistent Environment**: Ensures proper Python environment for all bot features
+- **Error Detection**: Helps identify configuration issues before bot startup
+- **Monitoring**: Console output shows advice command registration and status
 
 **Section sources**
 - [start_bot.bat](file://start_bot.bat)
 
 ## Dependency Analysis
-The bot depends on several internal modules and external libraries. Dependencies are declared in requirements.txt and imported throughout the codebase. The recent enhancements to the command handling system may require additional dependencies for improved error management and service integration.
+The bot depends on several internal modules and external libraries. The new advice command adds dependencies on screener functionality and enhanced database operations.
 
 ```mermaid
 graph LR
-BOT["bot.py"] --> HANDLERS["stock_bot/handlers.py"]
-BOT --> CFG["stock_bot/config.py"]
-BOT --> LLM["stock_bot/llm.py"]
-BOT --> PORTFOLIO["stock_bot/portfolio.py"]
-BOT --> TRADES["stock_bot/trades.py"]
-HANDLERS --> PORTFOLIO
-HANDLERS --> TRADES
-HANDLERS --> LLM
-HANDLERS --> CFG
-HANDLERS --> TRADING_AGENT["Trading Agent Integration"]
-HANDLERS --> NEWS_SERVICE["News Summary Service"]
-PORTFOLIO --> DB["data_eng/db.py"]
+VOICE["voice_logger_bot.py"] --> HANDLERS["stock_bot/handlers.py"]
+VOICE --> CFG["stock_bot/config.py"]
+HANDLERS --> ADVICE["Advice Command"]
+HANDLERS --> PORTFOLIO["stock_bot/portfolio.py"]
+HANDLERS --> TRADES["stock_bot/trades.py"]
+HANDLERS --> LLM["stock_bot/llm.py"]
+ADVICE --> SCREENER["data_eng/screener.py"]
+ADVICE --> DB["data_eng/db.py"]
+SCREENER --> DB
+PORTFOLIO --> DB
 TRADES --> DB
 DATA_MAIN["data_eng/__main__.py"] --> INGEST["data_eng/ingest.py"]
 DATA_MAIN --> DB
 ANALYSIS_RUNNER["analysis/runner.py"] --> DUCK["analysis/duckdb_vendor.py"]
 ANALYSIS_RUNNER --> DB
-STARTBAT["start_bot.bat"] --> BOT
+STARTBAT["start_bot.bat"] --> VOICE
 ```
 
 **Diagram sources**
-- [bot.py](file://bot.py)
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
-- [stock_bot/config.py](file://stock_bot/config.py)
-- [stock_bot/llm.py](file://stock_bot/llm.py)
-- [stock_bot/portfolio.py](file://stock_bot/portfolio.py)
-- [stock_bot/trades.py](file://stock_bot/trades.py)
-- [data_eng/__main__.py](file://data_eng/__main__.py)
-- [data_eng/ingest.py](file://data_eng/ingest.py)
-- [data_eng/db.py](file://data_eng/db.py)
-- [analysis/runner.py](file://analysis/runner.py)
-- [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
-- [start_bot.bat](file://start_bot.bat)
+- [voice_logger_bot.py:39-49](file://voice_logger_bot.py#L39-L49)
+- [stock_bot/handlers.py:645-696](file://stock_bot/handlers.py#L645-L696)
+- [data_eng/screener.py:406-429](file://data_eng/screener.py#L406-L429)
+- [data_eng/db.py:218-228](file://data_eng/db.py#L218-L228)
+
+### New Dependencies for Advice Command
+- **Screener Module**: Quantitative analysis and scoring functionality
+- **Enhanced Database Operations**: Additional queries for screener_scores and trading_agent_decisions tables
+- **Portfolio Engine Integration**: Access to holdings and watchlist data for filtering
+- **News Summary Integration**: Access to AI-generated news content
 
 **Section sources**
 - [requirements.txt](file://requirements.txt)
 
 ## Performance Considerations
-- Database choice: DuckDB enables fast analytical queries; ensure proper indexing and partitioning for large datasets.
-- Polling strategy: Use efficient polling intervals and batch processing to reduce overhead.
-- LLM calls: Implement caching and rate limiting to minimize latency and costs.
-- Memory usage: Stream large datasets instead of loading entirely into memory.
-- Concurrency: Avoid blocking operations in handlers; offload heavy tasks to background workers if needed.
-- **Updated**: Enhanced command handling system performance with optimized error processing and reduced overhead.
-- **Updated**: Improved service integration with efficient caching and connection pooling.
-- **Updated**: Better resource management for trading agent and news summary service calls.
-- **Updated**: Optimized command routing and processing pipeline for faster response times.
+- **Database Choice**: DuckDB enables fast analytical queries; ensure proper indexing and partitioning for large datasets.
+- **Polling Strategy**: Use efficient polling intervals and batch processing to reduce overhead.
+- **LLM Calls**: Implement caching and rate limiting to minimize latency and costs.
+- **Memory Usage**: Stream large datasets instead of loading entirely into memory.
+- **Concurrency**: Avoid blocking operations in handlers; offload heavy tasks to background workers if needed.
+- **Advice Command Optimization**: 
+  - Efficient database queries for screener scores and trading agent decisions
+  - Caching mechanisms for frequently accessed data
+  - Asynchronous processing for multiple data source requests
+  - Result truncation for large analysis cards to maintain responsiveness
+
+### Advice Command Performance
+- **Query Optimization**: Uses indexed database queries for screener scores and trading agent decisions
+- **Data Caching**: Minimizes repeated database calls for the same ticker information
+- **Response Formatting**: Truncates lengthy responses to maintain Telegram message limits
+- **Error Handling**: Graceful degradation when data sources are slow or unavailable
 
 ## Troubleshooting Guide
 Common issues and resolutions:
@@ -829,53 +734,52 @@ Common issues and resolutions:
 - LLM API failures: Check network connectivity, quotas, and retry policies.
 - Handler errors: Inspect logs for malformed commands or unexpected payloads.
 - Ingestion failures: Validate source formats and schema compatibility.
-- **Updated**: Enhanced command handling troubleshooting with specific error messages for command processing issues.
-- **Updated**: Service integration errors: Check network connectivity and API availability for trading agents and news services.
-- **Updated**: Error handling issues: Review error logs for detailed information about command failures and recovery attempts.
 
-Windows-specific troubleshooting:
+### Advice Command Specific Issues
+- **No Data Available**: Run the daily pipeline to populate screener scores and trading agent decisions
+- **Missing Ticker Data**: Ensure the ticker has been analyzed by the TradingAgents system
+- **Slow Response Times**: Check database performance and network connectivity to external APIs
+- **Incomplete Analysis Cards**: Verify that all required data sources (prices, screener scores, TA decisions, news) are available
+
+### Windows-Specific Troubleshooting
 - If start_bot.bat fails, verify Python installation and PATH configuration
 - Check for missing dependencies and run dependency installation manually if needed
 - Verify file permissions and antivirus software interference
 - Review console output for specific error messages and stack traces
-- **Updated**: For command handling issues, check enhanced logging for detailed error information about command processing and service integration.
 
-Operational tips:
-- Enable verbose logging during development.
-- Use test.py to validate component behavior in isolation.
-- Keep dependencies updated and pinned to known-good versions.
-- **Updated**: Monitor enhanced command handling system performance and error rates for optimization opportunities.
-- **Updated**: Regularly review error logs to identify and resolve recurring command processing issues.
+### Debugging Advice Command Issues
+- Enable verbose logging to see detailed query execution and data retrieval
+- Check database tables for recent screener scores and trading agent decisions
+- Verify that the daily pipeline has run successfully to populate required data
+- Test individual components (price lookup, screener query, TA decision retrieval) separately
 
 **Section sources**
 - [stock_bot/config.py](file://stock_bot/config.py)
 - [data_eng/db.py](file://data_eng/db.py)
 - [stock_bot/llm.py](file://stock_bot/llm.py)
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
-- [stock_bot/portfolio.py](file://stock_bot/portfolio.py)
-- [data_eng/ingest.py](file://data_eng/ingest.py)
+- [stock_bot/handlers.py:645-696](file://stock_bot/handlers.py#L645-L696)
+- [voice_logger_bot.py:39-49](file://voice_logger_bot.py#L39-L49)
+- [data_eng/screener.py:406-429](file://data_eng/screener.py#L406-L429)
 - [test.py](file://test.py)
 - [start_bot.bat](file://start_bot.bat)
 
 ## Conclusion
 The Stock Trading Bot is a modular system combining Telegram interaction, portfolio and trade management, LLM-powered insights, and robust data engineering and analysis capabilities. Its clear separation of concerns facilitates maintenance and extension. By following the setup instructions and adhering to best practices outlined here, users can operate and evolve the system effectively.
 
-**Updated** The recent enhancements to the command handling system represent a significant advancement in the bot's reliability and functionality, providing users with more robust error management, better integration with trading agents and news summary services, while maintaining full backward compatibility. The 101-line addition and 77-line removal in the command handling system brings institutional-grade reliability and user experience to individual investors through an intuitive Telegram interface. The improved error management and service integration further enhance the user experience, making advanced trading and analysis capabilities accessible and straightforward. These improvements transform the bot from a simple trading assistant into a comprehensive and reliable portfolio management platform.
+**Updated** The addition of the `/advice` command represents a significant enhancement to the bot's investment analysis capabilities, providing users with comprehensive stock analysis and investment discovery through an intuitive Telegram interface. The integration of screener scores, TradingAgents analysis, and news summaries creates a powerful tool for both individual investors and portfolio managers. The command's dual-mode operation allows for both targeted analysis of specific tickers and broad exploration of investment opportunities, making advanced investment analysis accessible to users regardless of their technical expertise.
 
 ## Appendices
 - Setup Instructions: Refer to SETUP.md for environment preparation and configuration steps.
 - Notes and Ideas: See MyNotes.md for additional context and future enhancements.
 - Dependencies: Review requirements.txt for library versions and installation commands.
-- **Updated**: Windows Deployment: Use start_bot.bat for simplified Windows deployment and bot launching.
-- **Updated**: Enhanced Command Handling: Configure advanced error management and service integration through the updated configuration options.
-- **Updated**: Trading Agent Integration: Set up and configure trading agents for automated strategy execution.
-- **Updated**: News Summary Services: Configure news summary services for market insights and analysis.
+- Windows Deployment: Use start_bot.bat for simplified Windows deployment and bot launching.
+- Report Definition: See notes/report_definition.md for detailed explanation of data sources and calculation methods.
+- Ideal Command Structure: Refer to notes/my_ideal.md for planned command structure and features.
 
 **Section sources**
 - [SETUP.md](file://SETUP.md)
 - [MyNotes.md](file://MyNotes.md)
 - [requirements.txt](file://requirements.txt)
 - [start_bot.bat](file://start_bot.bat)
-- [stock_bot/config.py](file://stock_bot/config.py)
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
-</docs>
+- [notes/report_definition.md](file://notes/report_definition.md)
+- [notes/my_ideal.md](file://notes/my_ideal.md)

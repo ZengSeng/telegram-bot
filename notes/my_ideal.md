@@ -146,11 +146,13 @@ Everything served from local DuckDB — no live network during an analysis:
   reports plus full context). The trader plan is NOT echoed in the notes;
   the Portfolio Manager receives it directly. The PM still weighs the
   trader plan against the three stances.
-- **Output token caps**: quick-tier generations capped at 1536 tokens,
-  deep-tier at 2048 (`LLM_MAX_TOKENS_*` in `analysis/runner.py`). The GPU is
+- **Output token caps**: both tiers capped at 2048 tokens
+  (`LLM_MAX_TOKENS_*` in `analysis/runner.py`). The GPU is
   generation-bound (~96% util), so runaway outputs were the biggest time
   sink; caps remove the long tail without touching the short structured
-  outputs (trader/PM JSON).
+  outputs (trader/PM JSON). The quick tier must stay >= 2048: at 1536,
+  analyst tool-call JSON got truncated mid-stream and llama-server
+  returned 500s (WSTL/FSLR, 2026-08-07 night run).
 - **Reports**: only the consolidated report is kept —
   `data/analysis_reports/reports/TICKER_TIMESTAMP.md` (e.g.
   `FROG_20260806_211112.md`). The per-section tree (1_analysts/… etc.) is no
@@ -178,10 +180,13 @@ burning API calls every run:
 3. It gets retried once `SKIP_RETRY_DAYS` (30) pass since the last attempt.
 4. Any successful fetch clears the record (attempt counter resets).
 
-For **prices** this covers the dead/delisted tickers (SPACs etc.) in the daily
-backfill loop — after 2 empty backfills they're skipped, so the log noise and
-wasted requests disappear. Helpers: `record_miss` / `clear_miss` /
-`get_skipped_tickers` in db.py.
+For **prices** this covers both paths of `batch_ingest_prices`: the daily
+backfill loop (new/very-stale tickers) AND the incremental batch's retry
+pass (added 2026-08-08) — renamed/delisted symbols like IAC (→ PPLI,
+June 2026) used to repeat "no price data" forever because only the
+backfill path recorded misses. After 2 consecutive empty fetches a ticker
+is skipped for 30 days; the skip list is honored on both paths. Helpers:
+`record_miss` / `clear_miss` / `get_skipped_tickers` in db.py.
 
 To reset manually: `DELETE FROM skip_tickers;` (optionally `WHERE source = '...'`).
 
@@ -298,7 +303,7 @@ python -m data_eng --enrich --sector technology --limit 20
 - All pipeline steps after ingestion are non-fatal: a failure logs a warning and the pipeline continues.
 - **Why rolling `financials` matters for TradingAgents**: the analysis fundamentals tools (`analysis/duckdb_vendor.py`) read balance sheet / cashflow / income statement from this table. Before the rolling batch, off-watchlist tickers returned `NO_DATA_AVAILABLE` during analysis; now they get 4 quarters of real statements. It also unlocks the earnings event trigger (new filing → re-analysis) for the whole universe, not just the watchlist.
 - `/summary TICKER` in Telegram shows a ticker's **latest** decision regardless of date (the night pipeline only re-analyzes on events/staleness, so "today" is often empty); bare `/summary` lists today's decisions.
-- `daily_prices` uses a fast bulk incremental download, chunked 700 tickers per yfinance request with pauses between chunks, plus one retry pass after 20s for rate-limited tickers (constants `PRICE_CHUNK_SIZE` / `PRICE_CHUNK_PAUSE` / `PRICE_RETRY_PAUSE` in ingest.py). Only tickers with no data or stale > 30 days are backfilled one-at-a-time; repeat no-data tickers are skipped via `skip_tickers` (source `prices`).
+- `daily_prices` uses a fast bulk incremental download, chunked 700 tickers per yfinance request with pauses between chunks, plus one retry pass after 20s for rate-limited tickers (constants `PRICE_CHUNK_SIZE` / `PRICE_CHUNK_PAUSE` / `PRICE_RETRY_PAUSE` in ingest.py). Only tickers with no data or stale > 7 days (`PRICE_INCREMENTAL_STALE_DAYS`, tightened from 30 on 2026-08-08 so the shared batch start stays shallow) are backfilled one-at-a-time; repeat no-data tickers are skipped via `skip_tickers` (source `prices`).
 - The manual `--enrich` CLI does NOT skip fresh tickers (processes up to `--limit` regardless of age) so it behaves predictably for one-off runs; the scheduled night pipeline is the one that skips fresh.
 - `rating` in stock_universe has string `'nan'` values (~270 rows) treated as lowest priority; consider normalizing to NULL someday.
 - **Portfolio sizing uses market value, not cost basis**: deployable capital = `TOTAL_CAPITAL` ($28,000) × 90% − current holdings value at latest close. Market value is correct here — new buys are sized against what the portfolio is worth now.

@@ -2,32 +2,24 @@
 
 <cite>
 **Referenced Files in This Document**
-- [data_eng/__main__.py](file://data_eng/__main__.py)
-- [data_eng/db.py](file://data_eng/db.py)
-- [data_eng/ingest.py](file://data_eng/ingest.py)
-- [stock_bot/__init__.py](file://stock_bot/__init__.py)
-- [stock_bot/config.py](file://stock_bot/config.py)
+- [voice_logger_bot.py](file://voice_logger_bot.py)
 - [stock_bot/handlers.py](file://stock_bot/handlers.py)
-- [stock_bot/llm.py](file://stock_bot/llm.py)
-- [stock_bot/portfolio.py](file://stock_bot/portfolio.py)
-- [stock_bot/trades.py](file://stock_bot/trades.py)
-- [analysis/__init__.py](file://analysis/__init__.py)
-- [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
-- [analysis/runner.py](file://analysis/runner.py)
+- [stock_bot/config.py](file://stock_bot/config.py)
+- [data_eng/portfolio_engine.py](file://data_eng/portfolio_engine.py)
+- [notes/report_definition.md](file://notes/report_definition.md)
+- [notes/my_ideal.md](file://notes/my_ideal.md)
+- [bot.py](file://bot.py)
 - [requirements.txt](file://requirements.txt)
-- [SETUP.md](file://SETUP.md)
-- [MyNotes.md](file://MyNotes.md)
-- [archived/test.py](file://archived/test.py)
-- [archived/voice_logger_bot-1.py](file://archived/voice_logger_bot-1.py)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Updated project structure to reflect modular architecture migration
-- Added new sections for data engineering, stock trading bot, and analysis modules
-- Revised core components to show distributed functionality
-- Updated architecture diagrams to reflect new module interactions
-- Enhanced dependency analysis for the new modular structure
+- Added comprehensive morning briefing system with 9:30 AM automated delivery
+- Implemented detailed report definition document mapping all data sources
+- Enhanced /advice command with full trade plan and ideas functionality
+- Integrated committee review system for portfolio decisions
+- Added news briefing component to daily summaries
+- Expanded voice message processing with AI-powered responses
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -35,22 +27,25 @@
 3. [Core Components](#core-components)
 4. [Architecture Overview](#architecture-overview)
 5. [Detailed Component Analysis](#detailed-component-analysis)
-6. [Dependency Analysis](#dependency-analysis)
-7. [Performance Considerations](#performance-considerations)
-8. [Troubleshooting Guide](#troubleshooting-guide)
-9. [Conclusion](#conclusion)
-10. [Appendices](#appendices)
+6. [Morning Briefing System](#morning-briefing-system)
+7. [Report Definition and Data Sources](#report-definition-and-data-sources)
+8. [Dependency Analysis](#dependency-analysis)
+9. [Performance Considerations](#performance-considerations)
+10. [Troubleshooting Guide](#troubleshooting-guide)
+11. [Conclusion](#conclusion)
+12. [Appendices](#appendices)
 
 ## Introduction
-This project implements a comprehensive Telegram Voice Logger Bot system that has evolved from a monolithic architecture to a modular design. The system captures voice messages sent by users and processes them through specialized modules for data engineering, stock trading integration, and analytical processing. Originally built with Python and the python-telegram-bot library, the system now distributes functionality across dedicated modules: data engineering for ingestion and storage, stock bot for trading operations, and analysis for data processing and insights generation.
+This project implements a comprehensive Telegram Voice Logger Bot system that has evolved from a simple voice logging tool into a sophisticated financial trading assistant. The system captures voice messages sent by users and processes them through specialized modules for data engineering, stock trading integration, and analytical processing. Originally built with Python and the python-telegram-bot library, the system now provides automated morning briefings at 9:30 AM, comprehensive trade advice, and intelligent voice message processing with local AI capabilities.
 
 Target audience:
 - Beginners learning how to build modular Telegram bots with Python
 - Intermediate developers extending data pipelines, trading integrations, or analytics features
 - Experienced engineers integrating transcription services, real-time streaming, or advanced analysis capabilities
+- Financial traders seeking automated market analysis and trading signals
 
 Scope and limitations:
-- Scope: Captures voice messages from Telegram chats, processes audio through specialized modules, and provides structured outputs for various use cases including stock trading signals, data archiving, and communication analysis.
+- Scope: Captures voice messages from Telegram chats, processes audio through specialized modules, provides structured outputs for various use cases including stock trading signals, data archiving, communication analysis, and automated financial reporting.
 - Limitations: While originally focused on voice message capture and logging, the system now supports multiple domains but requires careful configuration for each module's specific requirements.
 
 Potential use cases:
@@ -58,34 +53,31 @@ Potential use cases:
 - Audio archiving and compliance recording with structured metadata
 - Communication analysis tools requiring multi-module data processing
 - Real-time voice transcription services integrated with financial data
-
-[No sources needed since this section provides general guidance]
+- Automated daily financial briefings and portfolio management
 
 ## Project Structure
 The repository has been restructured from a monolithic design to a modular architecture with three primary functional areas:
 
-### Data Engineering Module (data_eng/)
-- **__main__.py**: Entry point for data ingestion pipeline
-- **db.py**: Database connectivity and management
-- **ingest.py**: Voice message ingestion and processing logic
+### Voice Logger Bot (Main Application)
+- **voice_logger_bot.py**: Main application entry point with scheduling and command handlers
+- **bot.py**: Legacy motivation check-in bot with voice transcription
+- **requirements.txt**: Updated dependencies for modular architecture
 
-### Stock Trading Bot Module (stock_bot/)
-- **__init__.py**: Package initialization and exports
-- **config.py**: Configuration management for trading operations
-- **handlers.py**: Telegram message handlers for trading commands
-- **llm.py**: Large language model integration for analysis
+### Stock Trading Module (stock_bot/)
+- **handlers.py**: Comprehensive command handlers including advice, portfolio, and morning briefing
+- **config.py**: Configuration management for trading operations and scheduling
+- **llm.py**: Large language model integration for analysis and voice processing
 - **portfolio.py**: Portfolio management and tracking
 - **trades.py**: Trade execution and monitoring
 
-### Analysis Module (analysis/)
-- **__init__.py**: Package initialization
-- **duckdb_vendor.py**: DuckDB database integration for analytics
-- **runner.py**: Analysis pipeline orchestration
+### Data Engineering Module (data_eng/)
+- **portfolio_engine.py**: Deterministic portfolio decision engine with risk management rules
+- **db.py**: Database connectivity and management
+- **pipeline.py**: Daily data pipeline orchestration
 
-### Legacy and Support Files
-- **requirements.txt**: Updated dependencies for modular architecture
-- **SETUP.md**: Comprehensive setup instructions for all modules
-- **MyNotes.md**: Developer notes covering the migration process
+### Analysis and Support
+- **analysis/**: Analytics framework with DuckDB integration
+- **notes/report_definition.md**: Comprehensive data source mapping documentation
 - **archived/**: Contains legacy implementations for reference
 
 ```mermaid
@@ -93,375 +85,388 @@ graph TB
 subgraph "Telegram Interface"
 A["Telegram API"]
 end
-subgraph "Data Engineering Module"
-B["data_eng/__main__.py"]
-C["data_eng/ingest.py"]
-D["data_eng/db.py"]
+subgraph "Voice Processing"
+B["voice_logger_bot.py"]
+C["Local LLM Integration"]
+D["Audio Transcription"]
 end
 subgraph "Stock Trading Module"
-E["stock_bot/__init__.py"]
-F["stock_bot/handlers.py"]
-G["stock_bot/config.py"]
-H["stock_bot/trades.py"]
-I["stock_bot/portfolio.py"]
-J["stock_bot/llm.py"]
+E["stock_bot/handlers.py"]
+F["stock_bot/config.py"]
+G["Portfolio Engine"]
+H["Trade Execution"]
+I["LLM Analysis"]
 end
-subgraph "Analysis Module"
-K["analysis/__init__.py"]
-L["analysis/runner.py"]
-M["analysis/duckdb_vendor.py"]
+subgraph "Data Engineering"
+J["data_eng/portfolio_engine.py"]
+K["Daily Pipeline"]
+L["Database Layer"]
+end
+subgraph "Scheduling"
+M["9:30 AM Morning Briefing"]
+N["8:00 AM Data Pipeline"]
+O["Night Pipeline Jobs"]
 end
 A --> B
 B --> C
 C --> D
-C --> E
+B --> E
 E --> F
-F --> G
-F --> H
-H --> I
-F --> J
-C --> K
+E --> G
+G --> J
+J --> K
 K --> L
-L --> M
+B --> M
+M --> E
+E --> H
+E --> I
 ```
 
 **Diagram sources**
-- [data_eng/__main__.py](file://data_eng/__main__.py)
-- [data_eng/ingest.py](file://data_eng/ingest.py)
-- [data_eng/db.py](file://data_eng/db.py)
-- [stock_bot/__init__.py](file://stock_bot/__init__.py)
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
-- [stock_bot/config.py](file://stock_bot/config.py)
-- [stock_bot/trades.py](file://stock_bot/trades.py)
-- [stock_bot/portfolio.py](file://stock_bot/portfolio.py)
-- [stock_bot/llm.py](file://stock_bot/llm.py)
-- [analysis/__init__.py](file://analysis/__init__.py)
-- [analysis/runner.py](file://analysis/runner.py)
-- [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
+- [voice_logger_bot.py:28-75](file://voice_logger_bot.py#L28-L75)
+- [stock_bot/handlers.py:175-202](file://stock_bot/handlers.py#L175-L202)
+- [data_eng/portfolio_engine.py:153-349](file://data_eng/portfolio_engine.py#L153-L349)
+- [stock_bot/config.py:49-57](file://stock_bot/config.py#L49-L57)
 
 **Section sources**
-- [data_eng/__main__.py](file://data_eng/__main__.py)
-- [stock_bot/__init__.py](file://stock_bot/__init__.py)
-- [analysis/__init__.py](file://analysis/__init__.py)
+- [voice_logger_bot.py:1-75](file://voice_logger_bot.py#L1-L75)
+- [stock_bot/handlers.py:1-886](file://stock_bot/handlers.py#L1-L886)
+- [data_eng/portfolio_engine.py:1-390](file://data_eng/portfolio_engine.py#L1-L390)
 
 ## Core Components
 The modular architecture distributes responsibilities across specialized modules:
 
-### Data Engineering Pipeline
-- **Ingestion Engine**: Processes incoming voice messages and extracts metadata
-- **Database Layer**: Manages persistent storage and data relationships
-- **Entry Point**: Orchestrates the data flow from Telegram to storage
+### Voice Processing Pipeline
+- **Voice Message Handler**: Processes incoming voice messages with automatic transcription
+- **Local LLM Integration**: Provides intelligent responses using Qwythos-9B model
+- **Audio Processing**: Converts and transcribes audio files using whisper.cpp
+- **Message Logging**: Structured JSONL logging with timestamps and metadata
 
 ### Stock Trading Integration
-- **Message Handlers**: Process trading-related commands and signals
-- **Configuration Management**: Handles trading parameters and API credentials
-- **Trade Execution**: Manages order placement and portfolio tracking
-- **LLM Integration**: Provides intelligent analysis and decision support
+- **Comprehensive Command Handlers**: Process trading-related commands including /advice, /portfolio, /charts
+- **Configuration Management**: Handles trading parameters, API credentials, and scheduling
+- **Portfolio Engine**: Deterministic rules-based trading decisions with risk management
+- **Morning Briefing System**: Automated 9:30 AM financial reports with trade plans and news
 
-### Analysis Framework
-- **Analytics Runner**: Coordinates data analysis workflows
-- **DuckDB Integration**: Enables high-performance analytical queries
-- **Vendor Abstraction**: Supports multiple data backends
+### Data Engineering Framework
+- **Portfolio Decision Engine**: Applies hard rules to generate actionable trading proposals
+- **Daily Pipeline**: Automated data ingestion from Yahoo Finance and other sources
+- **Database Layer**: DuckDB integration for high-performance analytical queries
+- **News Processing**: AI-powered news summarization and sentiment analysis
 
 Key responsibilities:
-- Modular voice message processing pipeline
-- Specialized handling for different message types and intents
+- Modular voice message processing pipeline with AI responses
+- Specialized handling for different message types and trading intents
 - Scalable data storage and retrieval mechanisms
-- Integrated trading and analysis capabilities
+- Integrated trading and analysis capabilities with automated reporting
 
 **Section sources**
-- [data_eng/ingest.py](file://data_eng/ingest.py)
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
-- [analysis/runner.py](file://analysis/runner.py)
+- [voice_logger_bot.py:39-52](file://voice_logger_bot.py#L39-L52)
+- [stock_bot/handlers.py:645-697](file://stock_bot/handlers.py#L645-L697)
+- [data_eng/portfolio_engine.py:153-349](file://data_eng/portfolio_engine.py#L153-L349)
 
 ## Architecture Overview
-The new modular architecture follows a pipeline pattern where voice messages flow through specialized processing stages:
+The new modular architecture follows a pipeline pattern where voice messages flow through specialized processing stages with automated scheduling:
 
 ```mermaid
 sequenceDiagram
 participant User as "Telegram User"
 participant TGAPI as "Telegram Bot API"
-participant Ingest as "data_eng/ingest.py"
-participant DB as "data_eng/db.py"
-participant Handler as "stock_bot/handlers.py"
-participant Trader as "stock_bot/trades.py"
-participant Analyzer as "analysis/runner.py"
+participant Scheduler as "Job Queue"
+participant Ingest as "Voice Handler"
+participant LLM as "Local LLM"
+participant DB as "DuckDB"
+participant Briefing as "Morning Briefing"
+Note over Scheduler : 8 : 00 AM - Data Pipeline
+Scheduler->>DB : Run daily data pipeline
+DB-->>Scheduler : Updated market data
+Note over Scheduler : 9 : 30 AM - Morning Briefing
+Scheduler->>Briefing : Generate morning briefing
+Briefing->>DB : Query portfolio decisions
+Briefing->>DB : Get news summaries
+Briefing->>TGAPI : Send trade plan + committee review + news
 User->>TGAPI : Send voice message
 TGAPI-->>Ingest : Update with voice payload
-Ingest->>Ingest : Extract metadata<br/>Validate content
-Ingest->>DB : Store raw data
-Ingest->>Handler : Route to appropriate handler
-Handler->>Trader : Execute trading logic
-Handler->>Analyzer : Trigger analysis pipeline
-Analyzer->>DB : Query historical data
-Analyzer-->>User : Return analysis results
+Ingest->>LLM : Transcribe and analyze
+LLM-->>Ingest : AI response
+Ingest-->>User : Reply with insights
 ```
 
 **Diagram sources**
-- [data_eng/ingest.py](file://data_eng/ingest.py)
-- [data_eng/db.py](file://data_eng/db.py)
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
-- [stock_bot/trades.py](file://stock_bot/trades.py)
-- [analysis/runner.py](file://analysis/runner.py)
+- [voice_logger_bot.py:54-67](file://voice_logger_bot.py#L54-L67)
+- [stock_bot/handlers.py:175-202](file://stock_bot/handlers.py#L175-L202)
+- [stock_bot/config.py:49-57](file://stock_bot/config.py#L49-L57)
 
 ## Detailed Component Analysis
 
-### Data Engineering Module
-The data engineering module handles the core voice message processing pipeline:
+### Voice Processing Module
+The main voice logger bot handles core voice message processing with AI integration:
 
-**Ingestion Engine (ingest.py)**
-- Validates incoming voice messages and extracts metadata
-- Performs initial processing and format normalization
-- Routes messages to appropriate downstream handlers
+**Main Application (voice_logger_bot.py)**
+- Initializes the bot with comprehensive command handlers
+- Sets up scheduled jobs for daily pipeline and morning briefings
+- Manages local LLM server startup and configuration
+- Routes voice messages to appropriate processing handlers
 
-**Database Layer (db.py)**
-- Manages connections to storage backends
-- Implements CRUD operations for voice message records
-- Handles data persistence and retrieval
+**Command Handlers (handlers.py)**
+- `/advice`: Comprehensive trading advice with trade plans and ideas
+- `/portfolio`: Portfolio summary with charts and performance metrics
+- `/analyze`: On-demand analysis of specific tickers
+- `/news`: News summaries for watchlist and candidates
+- Voice message processing with automatic transcription and AI responses
 
-**Entry Point (__main__.py)**
-- Initializes the ingestion pipeline
-- Configures error handling and logging
-- Manages lifecycle of processing workers
+**Configuration Management (config.py)**
+- Centralized configuration for all bot components
+- Scheduling setup for daily tasks and pipeline runs
+- Local LLM server configuration with Qwythos-9B model
+- File paths and logging configuration
 
 ```mermaid
 flowchart TD
-Start(["Voice Message Received"]) --> Validate{"Valid voice message?"}
-Validate --> |No| Reject["Reject and log error"]
-Validate --> |Yes| Extract["Extract metadata<br/>user, chat, timestamp"]
-Extract --> Normalize["Normalize data format"]
-Normalize --> Store["Store in database"]
-Store --> Route{"Route to handler?"}
-Route --> |Trading| TradingHandler["stock_bot/handlers.py"]
-Route --> |Analysis| AnalysisHandler["analysis/runner.py"]
-Route --> |Other| DefaultHandler["Default processing"]
-TradingHandler --> End(["Processing Complete"])
-AnalysisHandler --> End
-DefaultHandler --> End
-Reject --> End
+Start(["Voice Message Received"]) --> Transcribe{"Transcribe audio"}
+Transcribe --> |Success| Analyze{"AI Analysis"}
+Transcribe --> |Failed| Error["Log error and notify user"]
+Analyze --> |Success| Reply["Send AI response"]
+Analyze --> |Failed| Fallback["Use fallback response"]
+Reply --> End(["Processing Complete"])
+Fallback --> End
+Error --> End
 ```
 
 **Diagram sources**
-- [data_eng/ingest.py](file://data_eng/ingest.py)
-- [data_eng/db.py](file://data_eng/db.py)
+- [voice_logger_bot.py:125-159](file://voice_logger_bot.py#L125-L159)
+- [stock_bot/handlers.py:765-798](file://stock_bot/handlers.py#L765-L798)
 
 **Section sources**
-- [data_eng/ingest.py](file://data_eng/ingest.py)
-- [data_eng/db.py](file://data_eng/db.py)
-- [data_eng/__main__.py](file://data_eng/__main__.py)
+- [voice_logger_bot.py:28-75](file://voice_logger_bot.py#L28-L75)
+- [stock_bot/handlers.py:645-844](file://stock_bot/handlers.py#L645-L844)
+- [stock_bot/config.py:1-99](file://stock_bot/config.py#L1-L99)
 
-### Stock Trading Module
-The stock trading module integrates voice commands with trading operations:
+### Portfolio Decision Engine
+The portfolio engine applies deterministic rules to generate actionable trading proposals:
 
-**Message Handlers (handlers.py)**
-- Parse voice messages for trading intent
-- Execute appropriate trading actions based on user commands
-- Provide feedback and confirmation responses
+**Decision Logic (portfolio_engine.py)**
+- Loads holdings from trades.csv and current market data
+- Applies risk management rules (max 20% per stock, 35% per sector)
+- Enforces minimum screener score threshold (top 20%)
+- Calculates position sizing based on deployable capital
+- Generates BUY/SELL/HOLD recommendations with stop losses
 
-**Configuration Management (config.py)**
-- Manages trading parameters and API credentials
-- Validates configuration settings
-- Provides environment-specific configurations
-
-**Trade Execution (trades.py)**
-- Executes buy/sell orders based on voice commands
-- Tracks trade history and performance
-- Manages risk parameters and position limits
-
-**Portfolio Management (portfolio.py)**
-- Maintains current portfolio state
-- Calculates performance metrics
-- Generates portfolio reports
-
-**LLM Integration (llm.py)**
-- Provides intelligent analysis of market conditions
-- Supports natural language trading commands
-- Generates trading recommendations
+**Risk Management Rules**
+- Maximum 20% portfolio allocation per stock
+- Maximum 35% exposure per sector
+- Minimum screener score of 80 for buy signals
+- Mandatory 10% cash reserve
+- Default 8% stop loss if not provided by TradingAgents
 
 ```mermaid
 classDiagram
-class TradingHandler {
-+parse_voice_command()
-+execute_trade()
-+validate_permissions()
-+send_confirmation()
+class PortfolioEngine {
++run_portfolio_engine()
++_load_net_holdings()
++_load_latest_decisions()
++_load_screener_scores()
++_load_current_prices()
 }
-class TradeExecutor {
-+place_order()
-+cancel_order()
-+get_position()
-+calculate_pnl()
+class RiskManager {
++check_position_limits()
++validate_sector_exposure()
++calculate_stop_loss()
++enforce_cash_reserve()
 }
-class PortfolioManager {
-+update_holdings()
-+calculate_metrics()
-+generate_report()
-+risk_assessment()
-}
-class LLMAnalyzer {
-+analyze_market()
+class DecisionMaker {
++classify_signals()
++size_positions()
 +generate_recommendations()
-+process_natural_language()
-+sentiment_analysis()
++store_decisions()
 }
-TradingHandler --> TradeExecutor
-TradingHandler --> PortfolioManager
-TradingHandler --> LLMAnalyzer
+PortfolioEngine --> RiskManager
+PortfolioEngine --> DecisionMaker
 ```
 
 **Diagram sources**
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
-- [stock_bot/trades.py](file://stock_bot/trades.py)
-- [stock_bot/portfolio.py](file://stock_bot/portfolio.py)
-- [stock_bot/llm.py](file://stock_bot/llm.py)
+- [data_eng/portfolio_engine.py:153-349](file://data_eng/portfolio_engine.py#L153-L349)
 
 **Section sources**
-- [stock_bot/handlers.py](file://stock_bot/handlers.py)
-- [stock_bot/config.py](file://stock_bot/config.py)
-- [stock_bot/trades.py](file://stock_bot/trades.py)
-- [stock_bot/portfolio.py](file://stock_bot/portfolio.py)
-- [stock_bot/llm.py](file://stock_bot/llm.py)
+- [data_eng/portfolio_engine.py:1-390](file://data_eng/portfolio_engine.py#L1-L390)
 
-### Analysis Module
-The analysis module provides powerful data processing capabilities:
+## Morning Briefing System
+The system includes a comprehensive automated morning briefing delivered at 9:30 AM:
 
-**Analytics Runner (runner.py)**
-- Orchestrates analysis workflows
-- Manages data pipeline execution
-- Coordinates between different analysis components
+**Scheduled Delivery**
+- Runs daily at 9:30 AM NZT time
+- Sends charts for all tracked tickers first
+- Delivers portfolio summary with current holdings and performance
+- Provides trade plan with actionable BUY/SELL recommendations
+- Includes committee review highlighting risks and contradictions
+- Concludes with news briefings for watchlist and candidates
 
-**DuckDB Integration (duckdb_vendor.py)**
-- Provides high-performance analytical queries
-- Supports complex data transformations
-- Enables efficient batch processing
+**Content Components**
+- **Charts**: 90-day price charts for all tracked stocks
+- **Portfolio Summary**: Current holdings, performance metrics, and P&L
+- **Trade Plan**: Today's actionable trading proposals with position sizing
+- **Committee Review**: LLM-generated analysis of portfolio decisions
+- **News Briefing**: AI-summarized news for relevant tickers
 
-**Package Initialization (__init__.py)**
-- Exposes public APIs for analysis functions
-- Manages module dependencies
-- Provides configuration interfaces
-
-**Section sources**
-- [analysis/runner.py](file://analysis/runner.py)
-- [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
-- [analysis/__init__.py](file://analysis/__init__.py)
-
-### Legacy Code Reference
-The archived directory contains previous implementations that provide insight into the evolution of the system:
-
-- **archived/voice_logger_bot-1.py**: Original monolithic implementation showing the starting point of the architecture
-- **archived/test.py**: Test utilities and experimental code from earlier development phases
-
-These files serve as valuable references for understanding the migration process and potential future enhancements.
+**Robust Error Handling**
+- Each component wrapped in try-catch blocks
+- Individual failures don't prevent other components from executing
+- Detailed logging for troubleshooting and monitoring
+- Graceful degradation when data sources are unavailable
 
 **Section sources**
-- [archived/voice_logger_bot-1.py](file://archived/voice_logger_bot-1.py)
-- [archived/test.py](file://archived/test.py)
+- [stock_bot/handlers.py:175-202](file://stock_bot/handlers.py#L175-L202)
+- [stock_bot/handlers.py:437-456](file://stock_bot/handlers.py#L437-L456)
+- [stock_bot/config.py:49-57](file://stock_bot/config.py#L49-L57)
+
+## Report Definition and Data Sources
+A comprehensive report definition document maps every number in the system back to its source:
+
+**External Data Sources**
+- **Yahoo Finance API**: Stock prices, fundamentals, analyst targets, growth estimates, news articles
+- **Web Scrapes**: Stock universe ratings, Google Finance AI overviews, Yahoo Finance AI insights
+- **trades.csv**: Executed trade records with share counts and transaction details
+- **Local LLM**: News summaries, TradingAgents analyses, committee reviews using Qwythos-9B
+
+**DuckDB Data Tables**
+- `daily_prices`: Latest stock prices refreshed daily at 8 AM
+- `technicals`: Computed technical indicators from price data
+- `news_summaries`: AI-summarized news with catalysts, sentiment, and risks
+- `fundamentals`: Company fundamentals including P/E ratios and margins
+- `trading_agent_decisions`: Multi-agent LLM trading recommendations
+- `portfolio_decisions`: Rules-based trading proposals with position sizing
+- `portfolio_reviews`: Committee review of portfolio decisions
+
+**Advice Command Mapping**
+- `/advice TICKER`: Full buy card with price, day change, screener score, TradingAgents verdict, entry/stop/target levels, horizon, summary, and news
+- `/advice`: Trade plan section showing today's BUY/SELL proposals plus top screener ideas not held or watched
+
+**Trust Guidelines**
+- Hard numbers (prices, day changes, share counts) are factual and reliable
+- Screener scores are mechanical and reproducible but relative rankings
+- TradingAgents verdicts are informed opinions grounded in stored data
+- Trade plan represents deterministic rules applied to available inputs
+- Committee review highlights potential blind spots but doesn't introduce new facts
+
+**Section sources**
+- [notes/report_definition.md:1-106](file://notes/report_definition.md#L1-L106)
+- [notes/my_ideal.md:242-264](file://notes/my_ideal.md#L242-L264)
 
 ## Dependency Analysis
-The modular architecture introduces new dependency patterns while maintaining backward compatibility:
+The modular architecture introduces sophisticated dependency patterns while maintaining backward compatibility:
 
 ```mermaid
 graph TB
 subgraph "Core Dependencies"
 A["python-telegram-bot"]
 B["Standard Library"]
+C["DuckDB"]
 end
-subgraph "Data Engineering"
-C["SQLite/PostgreSQL Driver"]
-D["JSON Processing"]
-E["File I/O Operations"]
+subgraph "Voice Processing"
+D["whisper.cpp"]
+E["ffmpeg"]
+F["Local LLM Server"]
 end
-subgraph "Stock Trading"
-F["Trading API Client"]
-G["Market Data Provider"]
-H["Authentication Service"]
+subgraph "Financial Data"
+G["yfinance"]
+H["Market Data APIs"]
+I["Trading Platforms"]
 end
-subgraph "Analysis"
-I["DuckDB"]
+subgraph "Analysis Tools"
 J["Pandas/Numpy"]
-K["Statistical Libraries"]
+K["Technical Analysis Libraries"]
+L["Statistical Models"]
 end
 A --> C
 A --> F
-A --> I
 B --> D
 B --> E
 F --> G
-F --> H
-I --> J
-I --> K
+G --> H
+C --> J
+C --> K
 ```
 
 **Diagram sources**
 - [requirements.txt](file://requirements.txt)
+- [stock_bot/config.py:16-29](file://stock_bot/config.py#L16-L29)
 
 **Section sources**
 - [requirements.txt](file://requirements.txt)
+- [stock_bot/config.py:1-99](file://stock_bot/config.py#L1-L99)
 
 ## Performance Considerations
 The modular architecture enables several performance optimizations:
 
 - **Parallel Processing**: Each module can be scaled independently based on workload
 - **Memory Management**: Specialized modules optimize memory usage for their specific tasks
-- **Database Optimization**: Dedicated database layer provides optimized query performance
-- **Caching Strategies**: Module-level caching reduces redundant computations
-- **Resource Isolation**: Failures in one module don't impact others
+- **Database Optimization**: DuckDB provides high-performance analytical queries for large datasets
+- **Caching Strategies**: Module-level caching reduces redundant computations and API calls
+- **Resource Isolation**: Failures in one module don't impact others due to error boundaries
+- **Scheduled Processing**: Heavy computational tasks run during off-peak hours
+- **Batch Processing**: Night pipeline processes data in manageable batches to avoid resource exhaustion
 
 ## Troubleshooting Guide
 Common issues and resolutions for the modular architecture:
 
 ### Module-Specific Issues
-- **Data Engineering**: Check database connectivity and ingestion pipeline status
-- **Stock Trading**: Verify API credentials and network connectivity to trading platforms
-- **Analysis**: Ensure sufficient computational resources for data processing
+- **Voice Processing**: Check whisper.cpp installation, ffmpeg availability, and local LLM server status
+- **Stock Trading**: Verify API credentials, network connectivity to trading platforms, and database connections
+- **Data Pipeline**: Ensure Yahoo Finance access, web scraping permissions, and data validation
+- **Morning Briefing**: Check scheduled job status, database connectivity, and file permissions
 
 ### Cross-Module Communication
-- **Message Routing**: Verify proper routing between data engineering and other modules
+- **Message Routing**: Verify proper routing between voice processing and trading modules
 - **Data Format Compatibility**: Ensure consistent data schemas across modules
 - **Error Propagation**: Implement proper error handling between module boundaries
+- **Synchronization**: Monitor timing between scheduled jobs and data availability
 
 ### Operational Tips
 - Monitor individual module health and performance metrics
 - Use structured logging across all modules for better debugging
 - Implement circuit breakers for external service dependencies
-- Regular backup of critical data stores
+- Regular backup of critical data stores and configuration files
+- Test morning briefing delivery after any system updates
 
 **Section sources**
-- [SETUP.md](file://SETUP.md)
-- [MyNotes.md](file://MyNotes.md)
+- [stock_bot/handlers.py:437-456](file://stock_bot/handlers.py#L437-L456)
+- [voice_logger_bot.py:54-67](file://voice_logger_bot.py#L54-L67)
 
 ## Conclusion
-The Telegram Voice Logger Bot has successfully evolved from a monolithic architecture to a sophisticated modular system. This transformation enables better scalability, maintainability, and extensibility while preserving the core functionality of voice message processing. The new architecture supports diverse use cases ranging from simple voice logging to complex trading automation and advanced analytics.
+The Telegram Voice Logger Bot has successfully evolved from a simple voice logging tool into a sophisticated financial trading assistant with automated morning briefings. The system now provides comprehensive voice message processing with AI responses, automated daily financial reporting, and intelligent trading recommendations based on multi-source data analysis.
 
-The modular design allows developers to focus on specific aspects of the system without being overwhelmed by the entire codebase. Each module can be developed, tested, and deployed independently, enabling faster iteration cycles and more robust error isolation.
+The modular architecture enables better scalability, maintainability, and extensibility while preserving the core functionality of voice message processing. The addition of the morning briefing system at 9:30 AM delivers actionable trading insights, committee reviews, and news summaries automatically to users.
 
-Future enhancements can leverage this modular foundation to add new capabilities such as real-time streaming, advanced machine learning models, or additional trading strategies without disrupting existing functionality.
+The comprehensive report definition ensures transparency in data sourcing and processing, allowing users to understand exactly where each number and recommendation comes from. This transparency builds trust in the system's outputs while providing clear guidance on which data points to rely upon for different types of decisions.
 
-[No sources needed since this section summarizes without analyzing specific files]
+Future enhancements can leverage this modular foundation to add new capabilities such as real-time streaming, advanced machine learning models, additional trading strategies, or expanded market coverage without disrupting existing functionality.
 
 ## Appendices
 ### Quick Start Checklist
 - Install dependencies from requirements.txt
-- Configure environment variables per SETUP.md for each module
-- Set up database connections in data engineering module
-- Configure trading API credentials in stock bot module
-- Initialize analysis pipelines in the analysis module
-- Run individual modules using their respective entry points
+- Configure environment variables for bot token and local LLM server
+- Set up DuckDB database and initialize tables
+- Configure trading API credentials and portfolio settings
+- Start the main bot with `python voice_logger_bot.py`
+- Verify morning briefing delivery at 9:30 AM
+- Test voice message processing and AI responses
 
 ### Extension Ideas
-- Add new message handlers for different voice command types
-- Integrate additional data sources for enhanced analysis
-- Implement real-time streaming capabilities
-- Add advanced machine learning models for prediction
+- Add new command handlers for different voice command types
+- Integrate additional financial data sources for enhanced analysis
+- Implement real-time streaming capabilities for live market data
+- Add advanced machine learning models for prediction and pattern recognition
 - Create web dashboard for monitoring and control
-- Implement mobile app integration
+- Implement mobile app integration for on-the-go trading decisions
+- Expand morning briefing content with additional market indicators
 
 ### Migration Notes
-The migration from monolithic to modular architecture involved:
-- Separation of concerns into specialized modules
-- Implementation of clear interfaces between modules
-- Refactoring of shared functionality into common libraries
-- Addition of comprehensive error handling and logging
-- Creation of deployment scripts for each module
+The evolution from monolithic to modular architecture involved:
+- Separation of concerns into specialized modules for voice processing, trading, and data engineering
+- Implementation of clear interfaces between modules with well-defined APIs
+- Refactoring of shared functionality into common libraries and utilities
+- Addition of comprehensive error handling and logging throughout the system
+- Creation of deployment scripts and configuration management for each module
+- Implementation of scheduled jobs for automated processing and reporting
 
 [No sources needed since this section provides general guidance]

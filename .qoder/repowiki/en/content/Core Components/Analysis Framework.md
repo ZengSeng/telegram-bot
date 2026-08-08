@@ -24,10 +24,10 @@
 
 ## Update Summary
 **Changes Made**
-- **Major Architectural Change**: Completely rewrote `_create_grounded_researcher` as `_create_gfinance_evidence_node` in `analysis/runner.py`, eliminating LLM-based bull/bear research generation
-- **Direct Database Integration**: Replaced LLM calls with direct DuckDB queries for Google Finance sentiment data, significantly reducing processing time and eliminating local model tool call failures
-- **Enhanced Performance**: New implementation saves approximately two long generations per analysis by bypassing LLM calls entirely for bull/bear points
-- **Improved Reliability**: Eliminates dependency on local LLM models for market sentiment data, using pre-scraped Google Finance data instead
+- **Enhanced Token Management**: Added configurable token caps (LLM_MAX_TOKENS_QUICK=1536, LLM_MAX_TOKENS_DEEP=2048) to prevent runaway LLM generations and optimize performance
+- **Redesigned Risk Debate Mechanism**: Replaced LLM-based risk debators with rule-based nodes (aggressive, neutral, conservative) saving ~3 long generations per analysis
+- **Optimized Analysis Pipeline**: Combined token caps with rule-based nodes to significantly reduce processing time while maintaining portfolio manager evaluation quality
+- **Improved Performance**: Eliminated unnecessary LLM calls for risk assessment and market sentiment data through direct database integration
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -44,7 +44,7 @@
 ## Introduction
 This document provides a comprehensive analysis framework for the Telegram bot codebase. It explains the system architecture, core components, data flows, and integration points across the bot logic, data engineering pipeline, and analysis modules. The goal is to make the project understandable for both technical and non-technical readers while offering actionable insights into performance, error handling, and extensibility.
 
-**Updated** The analysis framework has undergone a significant architectural transformation with the introduction of direct Google Finance data integration. The new `_create_gfinance_evidence_node` function eliminates LLM-based bull/bear research generation in favor of efficient database queries, dramatically improving performance and reliability while maintaining the same analytical output format.
+**Updated** The analysis framework has undergone significant enhancements with the introduction of configurable token caps and a redesigned risk debate mechanism. The new system implements intelligent token management (LLM_MAX_TOKENS_QUICK=1536, LLM_MAX_TOKENS_DEEP=2048) and replaces LLM-based risk debators with efficient rule-based nodes, saving approximately 5 long generations per analysis while maintaining the same portfolio manager evaluation process.
 
 ## Project Structure
 The repository is organized into feature-based directories:
@@ -68,6 +68,8 @@ TV["TradingView Integration"]
 GF["Google Finance Integration"]
 LLM_ENH["Enhanced LLM Response Handling"]
 GFIN_NODE["_create_gfinance_evidence_node"]
+RISK_NODES["_create_rule_based_risk_node"]
+TOKEN_CAPS["Token Cap Management"]
 end
 subgraph "Data Engineering"
 DE_INIT["data_eng/__init__.py"]
@@ -102,6 +104,8 @@ RUN --> DUCK
 RUN --> TV
 RUN --> GF
 RUN --> GFIN_NODE
+RUN --> RISK_NODES
+RUN --> TOKEN_CAPS
 RUN --> DB_MOD
 RUN --> SDU
 RUN --> TA
@@ -111,6 +115,8 @@ RUN --> LLM_ENH
 DUCK --> DB_MOD
 GFIN --> DB_MOD
 GFIN_NODE --> DB_MOD
+RISK_NODES --> DB_MOD
+TOKEN_CAPS --> RUN
 ```
 
 **Diagram sources**
@@ -143,7 +149,7 @@ GFIN_NODE --> DB_MOD
 - Bot Entrypoints: Provide Telegram webhook/polling setup and route incoming messages to handlers.
 - Handlers: Implement command/message processing, orchestrate business logic, and interact with LLM, portfolio, and trades modules.
 - Data Engineering: Manage database connections and ingestion routines for persisting and retrieving data.
-- **Enhanced Analysis Engine**: Offer DuckDB vendor capabilities, TradingView integration, Google Finance bull/bear points integration, streamlined execution runner with comprehensive TradingAgents monkey-patching, sophisticated LLM response handling with degenerate-answer detection, and direct database-driven sentiment analysis.
+- **Enhanced Analysis Engine**: Offer DuckDB vendor capabilities, TradingView integration, Google Finance bull/bear points integration, streamlined execution runner with comprehensive TradingAgents monkey-patching, sophisticated LLM response handling with degenerate-answer detection, direct database-driven sentiment analysis, and intelligent token cap management.
 - **Advanced Dump Utilities**: Specialized stock analysis tools including data updating, technical analysis, ticker enrichment, and Yahoo Finance scraping.
 - Stock Bot Modules: Encapsulate configuration, LLM integrations, portfolio state, and trade lifecycle.
 
@@ -154,11 +160,13 @@ Key responsibilities:
 - Database operations (schema, queries, transactions).
 - **Comprehensive TradingAgents monkey-patching for offline DuckDB operation**.
 - **Direct Google Finance bull/bear points integration via database queries**.
+- **Intelligent token cap management to prevent runaway LLM generations**.
+- **Rule-based risk debate mechanism replacing LLM calls for improved performance**.
 - **Robust stubbing mechanisms for unavailable external APIs (FRED, Polymarket)**.
 - **Sophisticated LLM response validation and retry mechanisms for local models**.
 - **Specialized stock analysis workflows through dump utilities**.
 
-**Updated** The analysis component now provides comprehensive financial data processing capabilities through enhanced DuckDB vendor abstraction, Google Finance integration, TradingView integration, complete TradingAgents monkey-patching for offline operation, advanced LLM response handling with degenerate-answer detection, and direct database-driven sentiment analysis that eliminates LLM dependencies for market sentiment data.
+**Updated** The analysis component now provides comprehensive financial data processing capabilities through enhanced DuckDB vendor abstraction, Google Finance integration, TradingView integration, complete TradingAgents monkey-patching for offline operation, advanced LLM response handling with degenerate-answer detection, direct database-driven sentiment analysis, and intelligent token cap management that prevents excessive LLM usage while maintaining analytical quality.
 
 **Section sources**
 - [analysis/duckdb_vendor.py](file://analysis/duckdb_vendor.py)
@@ -175,7 +183,8 @@ The system follows a modular design where the bot layer delegates to specialized
 - LLM module abstracts external AI services with improved error handling.
 - Portfolio and Trades manage domain-specific state and operations.
 - Data Eng ensures persistence and ingestion with Google Finance scraping capabilities.
-- **Enhanced Analysis leverages DuckDB for fast analytics with TradingView data integration, direct Google Finance bull/bear points via database queries, complete TradingAgents monkey-patching, and sophisticated LLM response validation**.
+- **Enhanced Analysis leverages DuckDB for fast analytics with TradingView data integration, direct Google Finance bull/bear points via database queries, complete TradingAgents monkey-patching, sophisticated LLM response validation, and intelligent token cap management**.
+- **Rule-based risk debate mechanism eliminates LLM dependencies for risk assessment**.
 - **Dump utilities provide specialized stock analysis capabilities**.
 
 ```mermaid
@@ -196,12 +205,16 @@ participant DumpUtils as "dump/* utilities"
 participant TradingAgents as "TradingAgents Graph"
 participant LLMValidator as "Degenerate Answer Detection"
 participant GFINode as "_create_gfinance_evidence_node"
+participant RiskNodes as "_create_rule_based_risk_node"
+participant TokenCaps as "Token Cap Management"
 User->>Bot : "Send message/command"
 Bot->>Handler : "Route to handler"
 Handler->>LLM : "Generate response / analyze"
 Handler->>Portfolio : "Read/update positions"
 Handler->>Trades : "Create/track trades"
 Handler->>Runner : "Execute analysis"
+Runner->>TokenCaps : "Apply token limits (1536/2048)"
+TokenCaps-->>Runner : "Configured LLM instances"
 Runner->>TradingAgents : "Initialize with patched vendors"
 TradingAgents->>DuckDB : "run_analysis(query) via monkey-patched VENDOR_METHODS"
 DuckDB->>DB : "Access historical data"
@@ -210,6 +223,8 @@ TradingAgents->>GFINode : "Call bull/bear researcher nodes"
 GFINode->>DB : "Query gfinance_overview table directly"
 DB-->>GFINode : "Bull/bear points from database"
 GFINode-->>TradingAgents : "Formatted sentiment data"
+TradingAgents->>RiskNodes : "Call risk debator nodes"
+RiskNodes-->>TradingAgents : "Rule-based risk stances"
 Runner->>LLMValidator : "Validate LLM response quality"
 LLMValidator->>LLMValidator : "_is_degenerate_argument() check"
 LLMValidator->>LLMValidator : "_response_text() extraction"
@@ -221,7 +236,7 @@ Runner-->>Handler : "Analytics output with Google Finance grounding"
 Handler-->>User : "Reply with result"
 ```
 
-**Updated** The architecture now includes comprehensive TradingAgents monkey-patching, direct Google Finance bull/bear points integration via database queries (eliminating LLM calls), complete offline operation capabilities through DuckDB vendor methods, and sophisticated LLM response validation with automatic retry mechanisms.
+**Updated** The architecture now includes comprehensive TradingAgents monkey-patching, direct Google Finance bull/bear points integration via database queries (eliminating LLM calls), rule-based risk debate mechanism (saving ~3 generations), intelligent token cap management, complete offline operation capabilities through DuckDB vendor methods, and sophisticated LLM response validation with automatic retry mechanisms.
 
 **Diagram sources**
 - [stock_bot/handlers.py](file://stock_bot/handlers.py)
@@ -249,7 +264,7 @@ Responsibilities:
 Integration points:
 - stock_bot.handlers for command logic.
 - Configuration from stock_bot.config.
-- **Enhanced analysis engine with Google Finance integration, TradingAgents monkey-patching, sophisticated LLM response handling, and direct database-driven sentiment analysis for executing complex analytical workflows**.
+- **Enhanced analysis engine with Google Finance integration, TradingAgents monkey-patching, sophisticated LLM response handling, direct database-driven sentiment analysis, and intelligent token cap management for executing complex analytical workflows**.
 
 ```mermaid
 flowchart TD
@@ -261,9 +276,11 @@ Route --> Process["Process Command/Logic"]
 Process --> CheckAnalysis{"Analysis Required?"}
 CheckAnalysis --> |Yes| ExecuteAnalysis["Execute Enhanced Analysis Workflow"]
 CheckAnalysis --> |No| Reply["Send Response"]
-ExecuteAnalysis --> Analyze["Run DuckDB Analysis with TradingAgents Monkey-Patching"]
+ExecuteAnalysis --> ApplyTokens["Apply Token Caps (1536/2048)"]
+ApplyTokens --> Analyze["Run DuckDB Analysis with TradingAgents Monkey-Patching"]
 Analyze --> DirectDBQuery["Query Google Finance Data Directly"]
-DirectDBQuery --> FormatSentiment["Format Bull/Bear Points"]
+DirectDBQuery --> RuleBasedRisk["Apply Rule-Based Risk Assessment"]
+RuleBasedRisk --> FormatSentiment["Format Bull/Bear Points"]
 FormatSentiment --> ValidateLLM["Validate LLM Response Quality"]
 ValidateLLM --> RetryLogic["Apply Degenerate Answer Detection & Retry"]
 RetryLogic --> GetResults["Get Analysis Results"]
@@ -272,7 +289,7 @@ Reply --> Poll
 OnMessage --> |No| Poll
 ```
 
-**Updated** Added enhanced analysis workflow execution capability with direct Google Finance database queries, TradingAgents monkey-patching, and sophisticated LLM response validation with automatic retry mechanisms.
+**Updated** Added enhanced analysis workflow execution capability with intelligent token cap management, direct Google Finance database queries, TradingAgents monkey-patching, rule-based risk assessment, and sophisticated LLM response validation with automatic retry mechanisms.
 
 **Diagram sources**
 - [stock_bot/handlers.py](file://stock_bot/handlers.py)
@@ -286,12 +303,12 @@ Responsibilities:
 - Command parsing and validation.
 - Orchestration of LLM calls, portfolio updates, and trade creation.
 - Interaction with database for persistence.
-- **Coordination with enhanced analysis engine for financial data processing with direct Google Finance database integration, TradingAgents monkey-patching, and LLM response validation**.
+- **Coordination with enhanced analysis engine for financial data processing with direct Google Finance database integration, TradingAgents monkey-patching, LLM response validation, and intelligent token cap management**.
 
 Error handling:
 - Validate inputs and handle API failures gracefully.
 - Log errors and provide user-friendly responses.
-- **Handle TradingView API errors, DuckDB query failures, Google Finance scraping errors, TradingAgents monkey-patch exceptions, LLM response validation failures, and direct database query errors**.
+- **Handle TradingView API errors, DuckDB query failures, Google Finance scraping errors, TradingAgents monkey-patch exceptions, LLM response validation failures, direct database query errors, and token cap configuration issues**.
 
 ```mermaid
 classDiagram
@@ -315,10 +332,12 @@ class Handlers {
 +retry_with_explicit_prompts(prompt)
 +handle_direct_database_queries(query)
 +format_google_finance_sentiment(data)
++manage_token_caps(ticker)
++handle_token_cap_errors(error)
 }
 ```
 
-**Updated** Added methods for enhanced analysis execution, direct Google Finance database integration, TradingAgents monkey-patching coordination, LLM response validation, degenerate answer detection, comprehensive error handling, and direct database query processing.
+**Updated** Added methods for enhanced analysis execution, direct Google Finance database integration, TradingAgents monkey-patching coordination, LLM response validation, degenerate answer detection, comprehensive error handling, direct database query processing, and intelligent token cap management.
 
 **Diagram sources**
 - [stock_bot/handlers.py](file://stock_bot/handlers.py)
@@ -363,7 +382,7 @@ Responsibilities:
 - Maintain current positions and asset allocations.
 - Compute metrics like PnL, exposure, and diversification.
 - Persist state changes after trade execution.
-- **Integrate with enhanced analysis engine for portfolio analytics with direct Google Finance database integration, TradingAgents monkey-patching, and validated LLM responses**.
+- **Integrate with enhanced analysis engine for portfolio analytics with direct Google Finance database integration, TradingAgents monkey-patching, validated LLM responses, and rule-based risk assessment**.
 
 ```mermaid
 classDiagram
@@ -382,10 +401,12 @@ class Portfolio {
 +incorporate_google_finance_sentiment(sentiment)
 +validate_llm_responses(responses)
 +handle_direct_db_sentiment(data)
++process_rule_based_risk(risk_stances)
++evaluate_risk_debate(debate_state)
 }
 ```
 
-**Updated** Added methods for enhanced portfolio analytics integration with direct Google Finance database integration, TradingAgents monkey-patching support, and LLM response validation.
+**Updated** Added methods for enhanced portfolio analytics integration with direct Google Finance database integration, TradingAgents monkey-patching support, LLM response validation, and rule-based risk assessment processing.
 
 **Diagram sources**
 - [stock_bot/portfolio.py](file://stock_bot/portfolio.py)
@@ -398,7 +419,7 @@ Responsibilities:
 - Record trade events with metadata (timestamp, price, fees).
 - Enforce validation rules and idempotency.
 - Integrate with portfolio updates and database persistence.
-- **Support for enhanced analysis-driven trade recommendations with direct Google Finance database integration, TradingAgents monkey-patching, and validated LLM responses**.
+- **Support for enhanced analysis-driven trade recommendations with direct Google Finance database integration, TradingAgents monkey-patching, validated LLM responses, and rule-based risk assessment**.
 
 ```mermaid
 flowchart TD
@@ -408,8 +429,10 @@ Valid --> |No| Error["Return Validation Error"]
 Valid --> |Yes| CheckAnalysis{"Analysis Available?"}
 CheckAnalysis --> |Yes| RunAnalysis["Run Enhanced Market Analysis"]
 CheckAnalysis --> |No| Execute["Execute Trade Logic"]
-RunAnalysis --> DirectDBQuery["Query Google Finance Data Directly"]
-DirectDBQuery --> FormatSentiment["Format Bull/Bear Points"]
+RunAnalysis --> ApplyTokens["Apply Token Caps"]
+ApplyTokens --> DirectDBQuery["Query Google Finance Data Directly"]
+DirectDBQuery --> RuleBasedRisk["Apply Rule-Based Risk Assessment"]
+RuleBasedRisk --> FormatSentiment["Format Bull/Bear Points"]
 FormatSentiment --> AnalyzeResult["Analyze Results with TradingAgents Support"]
 AnalyzeResult --> ValidateLLM["Validate LLM Response Quality"]
 ValidateLLM --> RetryLogic["Apply Degenerate Answer Detection"]
@@ -421,7 +444,7 @@ Confirm --> End(["Done"])
 Error --> End
 ```
 
-**Updated** Added enhanced analysis-driven trade recommendation capability with direct Google Finance database integration, TradingAgents monkey-patching, and sophisticated LLM response validation with automatic retry mechanisms.
+**Updated** Added enhanced analysis-driven trade recommendation capability with intelligent token cap management, direct Google Finance database integration, TradingAgents monkey-patching, rule-based risk assessment, and sophisticated LLM response validation with automatic retry mechanisms.
 
 **Diagram sources**
 - [stock_bot/trades.py](file://stock_bot/trades.py)
@@ -492,6 +515,8 @@ Responsibilities:
 - **Efficient financial data processing capabilities with validation and error recovery**.
 - **Sophisticated LLM response validation with degenerate-answer detection and automatic retry logic**.
 - **Direct database-driven bull/bear sentiment analysis via _create_gfinance_evidence_node**.
+- **Intelligent token cap management to prevent runaway LLM generations**.
+- **Rule-based risk debate mechanism replacing LLM calls for improved performance**.
 
 ```mermaid
 sequenceDiagram
@@ -504,6 +529,10 @@ participant DB as "data_eng/db.py"
 participant DumpUtils as "dump/* utilities"
 participant Stubs as "API Stubs (FRED, Polymarket)"
 participant GFINode as "_create_gfinance_evidence_node"
+participant RiskNodes as "_create_rule_based_risk_node"
+participant TokenCaps as "Token Cap Management"
+Runner->>TokenCaps : "Configure token limits (1536/2048)"
+TokenCaps-->>Runner : "Applied max_tokens settings"
 Runner->>TradingAgents : "Initialize with monkey-patched VENDOR_METHODS"
 TradingAgents->>DuckDB : "run_analysis(query) via duckdb vendor"
 DuckDB->>DB : "fetch_historical_data(symbol)"
@@ -512,6 +541,8 @@ TradingAgents->>GFINode : "Call bull/bear researcher nodes"
 GFINode->>DB : "Direct query : SELECT bull_points, bear_points FROM gfinance_overview"
 DB-->>GFINode : "Bull/bear points from database"
 GFINode-->>TradingAgents : "Formatted sentiment data"
+TradingAgents->>RiskNodes : "Call risk debator nodes"
+RiskNodes-->>TradingAgents : "Rule-based risk stances"
 Runner->>Stubs : "Call stubbed APIs (FRED, Polymarket)"
 Stubs-->>Runner : "Graceful fallback responses"
 Runner->>LLMValidator : "Validate LLM response quality"
@@ -525,7 +556,7 @@ DuckDB-->>Runner : "Analysis results"
 Runner-->>TradingAgents : "Complete analysis with direct Google Finance data"
 ```
 
-**Updated** Complete analysis engine with comprehensive TradingAgents monkey-patching, direct Google Finance database integration via `_create_gfinance_evidence_node`, DuckDB vendor support, robust API stubbing mechanisms, and sophisticated LLM response validation with degenerate-answer detection and automatic retry logic.
+**Updated** Complete analysis engine with comprehensive TradingAgents monkey-patching, direct Google Finance database integration via `_create_gfinance_evidence_node`, rule-based risk debate mechanism via `_create_rule_based_risk_node`, intelligent token cap management, DuckDB vendor support, robust API stubbing mechanisms, and sophisticated LLM response validation with degenerate-answer detection and automatic retry logic.
 
 **Diagram sources**
 - [analysis/runner.py](file://analysis/runner.py)
@@ -636,7 +667,7 @@ class YahooStatsScraper {
 - [dump/yahoo_stats_scraper.py](file://dump/yahoo_stats_scraper.py)
 
 ### Conceptual Overview
-The system integrates real-time messaging with analytical and data engineering capabilities enhanced by direct Google Finance database integration, comprehensive TradingAgents monkey-patching, and sophisticated LLM response validation. Users interact via Telegram, triggering workflows that may involve AI-driven insights, portfolio management, trade processing, and sophisticated financial analysis powered by optimized DuckDB, TradingView, direct Google Finance database queries, specialized dump utilities, and robust LLM response handling. Analytics can be executed on-demand or scheduled, leveraging DuckDB for efficient computation, TradingView for real-time market intelligence, direct Google Finance database queries for crowd-sourced sentiment, specialized dump utilities for comprehensive stock analysis, and advanced LLM response validation for reliable local model operation.
+The system integrates real-time messaging with analytical and data engineering capabilities enhanced by direct Google Finance database integration, comprehensive TradingAgents monkey-patching, sophisticated LLM response validation, and intelligent token cap management. Users interact via Telegram, triggering workflows that may involve AI-driven insights, portfolio management, trade processing, and sophisticated financial analysis powered by optimized DuckDB, TradingView, direct Google Finance database queries, specialized dump utilities, rule-based risk assessment, and robust LLM response handling. Analytics can be executed on-demand or scheduled, leveraging DuckDB for efficient computation, TradingView for real-time market intelligence, direct Google Finance database queries for crowd-sourced sentiment, specialized dump utilities for comprehensive stock analysis, rule-based risk assessment for improved performance, and advanced LLM response validation for reliable local model operation.
 
 ```mermaid
 graph TB
@@ -653,6 +684,8 @@ EnhancedAnalytics --> DirectDBQuery["Direct Google Finance DB Queries"]
 EnhancedAnalytics --> DumpUtilities["Dump Utilities"]
 EnhancedAnalytics --> TradingAgents["TradingAgents Monkey-Patching"]
 EnhancedAnalytics --> LLMValidation["LLM Response Validation"]
+EnhancedAnalytics --> TokenCaps["Token Cap Management"]
+EnhancedAnalytics --> RuleBasedRisk["Rule-Based Risk Assessment"]
 TradingAgents --> OfflineOperation["Offline Operation with Stored Data"]
 DirectDBQuery --> MarketSentiment["Real-time Market Sentiment from DB"]
 DumpUtilities --> StockDataUpdater["Stock Data Updater"]
@@ -661,6 +694,11 @@ DumpUtilities --> TickerEnricher["Ticker Enricher"]
 DumpUtilities --> YahooScraper["Yahoo Stats Scraper"]
 LLMValidation --> DegenerateDetection["Degenerate Answer Detection"]
 LLMValidation --> RetryLogic["Automatic Retry Logic"]
+TokenCaps --> QuickThinking["Quick Thinking: 1536 tokens"]
+TokenCaps --> DeepThinking["Deep Thinking: 2048 tokens"]
+RuleBasedRisk --> Aggressive["Aggressive Stance"]
+RuleBasedRisk --> Neutral["Neutral Stance"]
+RuleBasedRisk --> Conservative["Conservative Stance"]
 ```
 
 [No sources needed since this diagram shows conceptual workflow, not actual code structure]
@@ -669,7 +707,7 @@ LLMValidation --> RetryLogic["Automatic Retry Logic"]
 Key dependencies:
 - External libraries for Telegram API, LLM providers, DuckDB, TradingView, Google Finance scraping (Playwright), and specialized stock analysis tools.
 - Internal modules with clear separation of concerns.
-- **Enhanced financial data processing dependencies with TradingAgents monkey-patching, direct Google Finance database integration, and sophisticated LLM response validation**.
+- **Enhanced financial data processing dependencies with TradingAgents monkey-patching, direct Google Finance database integration, sophisticated LLM response validation, and intelligent token cap management**.
 
 ```mermaid
 graph TB
@@ -691,6 +729,8 @@ TE["dump/ticker_enricher.py"]
 YSS["dump/yahoo_stats_scraper.py"]
 LLMVAL["LLM Response Validation"]
 GFINODE["_create_gfinance_evidence_node"]
+RISKNODES["_create_rule_based_risk_node"]
+TOKENCAPS["Token Cap Management"]
 REQ --> BOT
 BOT --> HANDLER
 HANDLER --> LLM
@@ -703,6 +743,8 @@ RUNNER --> DUCK
 RUNNER --> TRADINGVIEW
 RUNNER --> GFIN
 RUNNER --> GFINODE
+RUNNER --> RISKNODES
+RUNNER --> TOKENCAPS
 RUNNER --> SDU
 RUNNER --> TA
 RUNNER --> TE
@@ -712,6 +754,8 @@ RUNNER --> LLMVAL
 DUCK --> DB
 GFIN --> DB
 GFINODE --> DB
+RISKNODES --> DB
+TOKENCAPS --> RUNNER
 SDU --> DB
 TA --> DB
 TE --> DB
@@ -719,7 +763,7 @@ YSS --> DB
 LLMVAL --> RUNNER
 ```
 
-**Updated** Added comprehensive Google Finance integration, TradingAgents monkey-patching dependencies, enhanced analysis dependencies, sophisticated LLM response validation capabilities, and direct database-driven sentiment analysis via `_create_gfinance_evidence_node`.
+**Updated** Added comprehensive Google Finance integration, TradingAgents monkey-patching dependencies, enhanced analysis dependencies, sophisticated LLM response validation capabilities, direct database-driven sentiment analysis via `_create_gfinance_evidence_node`, rule-based risk assessment via `_create_rule_based_risk_node`, and intelligent token cap management.
 
 **Diagram sources**
 - [requirements.txt](file://requirements.txt)
@@ -757,8 +801,11 @@ LLMVAL --> RUNNER
 - **Optimize LLM response validation with efficient degenerate-answer detection algorithms**.
 - **Minimize retry attempts to balance reliability with response time**.
 - **Eliminate LLM calls for bull/bear points via direct database queries, saving ~2 generations per analysis**.
+- **Apply intelligent token caps (1536 for quick thinking, 2048 for deep thinking) to prevent runaway generations**.
+- **Replace LLM-based risk debators with rule-based nodes, saving ~3 generations per analysis**.
+- **Combine token caps with rule-based mechanisms for maximum performance improvement**.
 
-**Updated** Added considerations for Google Finance scraping optimization, TradingAgents monkey-patching performance, enhanced error handling mechanisms, comprehensive offline operation capabilities, sophisticated LLM response validation with efficient degenerate-answer detection and controlled retry logic, and direct database-driven sentiment analysis that eliminates LLM dependencies for market sentiment data.
+**Updated** Added considerations for Google Finance scraping optimization, TradingAgents monkey-patching performance, enhanced error handling mechanisms, comprehensive offline operation capabilities, sophisticated LLM response validation with efficient degenerate-answer detection and controlled retry logic, direct database-driven sentiment analysis that eliminates LLM dependencies for market sentiment data, intelligent token cap management to prevent excessive LLM usage, and rule-based risk assessment that significantly reduces processing time while maintaining analytical quality.
 
 ## Troubleshooting Guide
 Common issues and resolutions:
@@ -774,6 +821,8 @@ Common issues and resolutions:
 - **Polymarket integration issues: Set up API credentials or rely on stubbed prediction market data**.
 - **LLM response validation issues: Check degenerate-answer detection thresholds and retry logic configuration**.
 - **Direct database query issues: Verify gfinance_overview table exists and contains data for requested tickers**.
+- **Token cap configuration issues: Verify LLM_MAX_TOKENS_QUICK and LLM_MAX_TOKENS_DEEP values are appropriate for your model**.
+- **Rule-based risk node issues: Check that risk debate state is properly initialized and maintained**.
 
 Debugging tips:
 - Enable detailed logging in handlers and data layers.
@@ -788,8 +837,10 @@ Debugging tips:
 - **Monitor LLM response validation effectiveness and adjust degenerate-answer detection thresholds as needed**.
 - **Log retry attempts and their outcomes for debugging LLM response quality issues**.
 - **Verify gfinance_overview table schema and data consistency for direct database queries**.
+- **Monitor token cap effectiveness and adjust values based on model performance**.
+- **Validate rule-based risk assessment output format and content quality**.
 
-**Updated** Added comprehensive troubleshooting guidance for Google Finance integration, TradingAgents monkey-patching, API stubbing mechanisms, error handling strategies, offline operation debugging, sophisticated LLM response validation with degenerate-answer detection and retry logic troubleshooting, and direct database query troubleshooting for Google Finance sentiment data.
+**Updated** Added comprehensive troubleshooting guidance for Google Finance integration, TradingAgents monkey-patching, API stubbing mechanisms, error handling strategies, offline operation debugging, sophisticated LLM response validation with degenerate-answer detection and retry logic troubleshooting, direct database query troubleshooting for Google Finance sentiment data, intelligent token cap configuration and monitoring, and rule-based risk assessment debugging.
 
 **Section sources**
 - [stock_bot/handlers.py](file://stock_bot/handlers.py)
@@ -804,7 +855,7 @@ Debugging tips:
 ## Conclusion
 The Telegram bot codebase demonstrates a well-structured, modular architecture that separates concerns across bot logic, data engineering, and analysis. By following the patterns outlined here, developers can extend functionality, improve performance, and maintain robust error handling. The provided diagrams and analyses serve as a foundation for understanding and evolving the system.
 
-**Updated** The enhanced analysis framework now provides comprehensive financial data processing capabilities through complete TradingAgents monkey-patching, direct Google Finance database integration via `_create_gfinance_evidence_node`, robust API stubbing mechanisms, specialized dump utilities for stock analysis, and sophisticated LLM response validation with degenerate-answer detection and automatic retry logic. The system achieves full offline operation with stored data while maintaining all TradingAgents functionality, making it highly reliable and independent of external API availability. The new direct database-driven approach eliminates LLM dependencies for market sentiment data, significantly improving performance and reliability while maintaining the same analytical output format.
+**Updated** The enhanced analysis framework now provides comprehensive financial data processing capabilities through complete TradingAgents monkey-patching, direct Google Finance database integration via `_create_gfinance_evidence_node`, rule-based risk debate mechanism via `_create_rule_based_risk_node`, intelligent token cap management, robust API stubbing mechanisms, specialized dump utilities for stock analysis, and sophisticated LLM response validation with degenerate-answer detection and automatic retry logic. The system achieves full offline operation with stored data while maintaining all TradingAgents functionality, making it highly reliable and independent of external API availability. The new direct database-driven approach eliminates LLM dependencies for market sentiment data, and the rule-based risk assessment saves approximately 3 generations per analysis, while intelligent token caps prevent runaway LLM generations, significantly improving performance and reliability while maintaining the same analytical output format.
 
 ## Appendices
 - Setup instructions and environment configuration are documented in SETUP.md.
@@ -821,8 +872,11 @@ The Telegram bot codebase demonstrates a well-structured, modular architecture t
 - **Centralized LLM configuration management with LLAMA_BASE_URL and LLAMA_MODEL constants**.
 - **Direct database query optimization for Google Finance sentiment data retrieval**.
 - **_create_gfinance_evidence_node configuration and performance tuning**.
+- **Intelligent token cap configuration with LLM_MAX_TOKENS_QUICK=1536 and LLM_MAX_TOKENS_DEEP=2048**.
+- **Rule-based risk assessment configuration with aggressive, neutral, and conservative stances**.
+- **Performance monitoring and optimization strategies for combined token caps and rule-based mechanisms**.
 
-**Updated** Added appendices for Google Finance integration, TradingAgents monkey-patching, API stubbing mechanisms, enhanced error handling, comprehensive testing strategies for offline operation, sophisticated LLM response validation with degenerate-answer detection, centralized LLM configuration management, and direct database-driven sentiment analysis via `_create_gfinance_evidence_node`.
+**Updated** Added appendices for Google Finance integration, TradingAgents monkey-patching, API stubbing mechanisms, enhanced error handling, comprehensive testing strategies for offline operation, sophisticated LLM response validation with degenerate-answer detection, centralized LLM configuration management, direct database-driven sentiment analysis via `_create_gfinance_evidence_node`, intelligent token cap management, and rule-based risk assessment via `_create_rule_based_risk_node`.
 
 **Section sources**
 - [SETUP.md](file://SETUP.md)

@@ -13,7 +13,7 @@ import requests
 import yfinance as yf
 from bs4 import BeautifulSoup
 
-from .db import get_connection, get_skipped_tickers, record_miss, clear_miss
+from .db import get_connection, get_skipped_tickers, record_miss, clear_miss, SKIP_RETRY_DAYS
 
 log = logging.getLogger(__name__)
 
@@ -708,6 +708,11 @@ def ingest_enriched(ticker: str) -> bool:
 PRICE_CHUNK_SIZE = 700
 PRICE_CHUNK_PAUSE = 5       # seconds between chunks
 PRICE_RETRY_PAUSE = 20      # seconds before the one retry pass for failures
+# Tickers whose latest stored row is older than this leave the shared
+# incremental batch and backfill individually. Kept tight (7 days) so the
+# shared batch's start date stays shallow — one 3-week-stale ticker used
+# to drag the whole batch's lookback with it.
+PRICE_INCREMENTAL_STALE_DAYS = 7
 
 
 def batch_ingest_prices(tickers: list[str], lookback_days: int = 3 * 365) -> int:
@@ -749,10 +754,11 @@ def batch_ingest_prices(tickers: list[str], lookback_days: int = 3 * 365) -> int
         return 0
 
     # Split: incremental (has recent data, small top-up) vs stale/new (long backfill).
-    # A ticker is incremental if its latest stored row is within the last 30 days,
-    # keeping the shared batch start shallow. Older/new tickers backfill one at a
-    # time so one stale ticker doesn't drag the whole batch's lookback.
-    incremental_cutoff = today - timedelta(days=30)
+    # A ticker is incremental if its latest stored row is within the last
+    # PRICE_INCREMENTAL_STALE_DAYS, keeping the shared batch start shallow.
+    # Older/new tickers backfill one at a time so one stale ticker doesn't
+    # drag the whole batch's lookback.
+    incremental_cutoff = today - timedelta(days=PRICE_INCREMENTAL_STALE_DAYS)
     incremental = [
         (t, s) for t, s in to_download
         if t in latest_dates and latest_dates[t] >= incremental_cutoff
@@ -763,6 +769,18 @@ def batch_ingest_prices(tickers: list[str], lookback_days: int = 3 * 365) -> int
     ]
 
     total_rows = 0
+
+    # Tickers that keep returning no data (delisted, renamed, dead SPACs)
+    # are tracked in skip_tickers; honor the skip list on BOTH paths so
+    # known-dead tickers stop burning a request every run (IAC → PPLI
+    # rename repeated daily until this was added).
+    skipped_prices = get_skipped_tickers("prices")
+    skipped_inc = [(t, s) for t, s in incremental if t in skipped_prices]
+    if skipped_inc:
+        incremental = [(t, s) for t, s in incremental if t not in skipped_prices]
+        log.info("Incremental: skipping %d known no-data tickers (%s)",
+                 len(skipped_inc),
+                 ", ".join(t for t, _ in skipped_inc[:10]) + ("..." if len(skipped_inc) > 10 else ""))
 
     # --- Batch 1: incremental (fast, max 30-day lookback), chunked to avoid
     #     Yahoo rate limits; failed tickers get one retry pass at the end.
@@ -787,6 +805,7 @@ def batch_ingest_prices(tickers: list[str], lookback_days: int = 3 * 365) -> int
             log.info("Retrying %d failed tickers after %ds pause",
                      len(missing), PRICE_RETRY_PAUSE)
             time.sleep(PRICE_RETRY_PAUSE)
+            final_missing: list[tuple] = []
             for ri in range(0, len(missing), PRICE_CHUNK_SIZE):
                 if ri > 0 and PRICE_CHUNK_PAUSE:
                     time.sleep(PRICE_CHUNK_PAUSE)
@@ -794,17 +813,26 @@ def batch_ingest_prices(tickers: list[str], lookback_days: int = 3 * 365) -> int
                 rows, still_missing = _download_and_insert(
                     conn, [t for t, _ in rchunk], inc_start, today, rchunk)
                 total_rows += rows
-                if still_missing:
-                    log.warning("Still no data after retry for %d tickers "
-                                "(will pick them up next run): %s",
-                                len(still_missing),
-                                ", ".join(t for t, _ in still_missing[:10]) + ("..." if len(still_missing) > 10 else ""))
+                final_missing.extend(still_missing)
+
+            # Retry recovered -> reset skip tracking; still empty -> count a
+            # miss (after SKIP_ATTEMPT_THRESHOLD consecutive misses the
+            # ticker is skipped for SKIP_RETRY_DAYS).
+            recovered = {t for t, _ in missing} - {t for t, _ in final_missing}
+            for t in recovered:
+                clear_miss(t, "prices")
+            for t, _ in final_missing:
+                record_miss(t, "prices")
+            if final_missing:
+                log.warning("Still no data after retry for %d tickers "
+                            "(skip-tracked, retried in %d days): %s",
+                            len(final_missing), SKIP_RETRY_DAYS,
+                            ", ".join(t for t, _ in final_missing[:10]) + ("..." if len(final_missing) > 10 else ""))
 
     # --- Batch 2: backfill (new or very stale tickers, one at a time) ---
     # Tickers that keep returning no data (delisted, dead SPACs) are tracked
     # in skip_tickers so they stop burning a request every run.
     if backfill:
-        skipped_prices = get_skipped_tickers("prices")
         skipped_now = [(t, s) for t, s in backfill if t in skipped_prices]
         backfill = [(t, s) for t, s in backfill if t not in skipped_prices]
         if skipped_now:
@@ -813,7 +841,8 @@ def batch_ingest_prices(tickers: list[str], lookback_days: int = 3 * 365) -> int
                      ", ".join(t for t, _ in skipped_now[:10]) + ("..." if len(skipped_now) > 10 else ""))
 
     if backfill:
-        log.info("Backfilling %d tickers individually (new or >30d stale)", len(backfill))
+        log.info("Backfilling %d tickers individually (new or >%dd stale)",
+                 len(backfill), PRICE_INCREMENTAL_STALE_DAYS)
         for t, s in backfill:
             try:
                 rows, _ = _download_and_insert(conn, [t], s, today, [(t, s)])

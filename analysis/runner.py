@@ -18,8 +18,11 @@ REPORTS_DIR = Path(__file__).parent.parent / "data" / "analysis_reports"
 # Hard cap on tokens per LLM generation. The GPU is generation-bound
 # (~96% util), so runaway outputs are the biggest time sink; capping
 # removes the long tail. Structured outputs (trader/PM JSON) are short
-# and unaffected.
-LLM_MAX_TOKENS_QUICK = 1536
+# and unaffected. The quick tier must stay high enough that analyst
+# tool-call messages are never truncated mid-JSON — at 1536 that caused
+# llama-server 500s "Failed to parse tool call arguments" (WSTL/FSLR,
+# 2026-08-07 night run).
+LLM_MAX_TOKENS_QUICK = 2048
 LLM_MAX_TOKENS_DEEP = 2048
 
 
